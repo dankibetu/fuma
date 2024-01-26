@@ -1,0 +1,235 @@
+config:
+  schema: xxsfc # schema objects
+  prefix: hr_report # used for tables/sequences
+  application: XXSFC
+  # build: # include/exclude object
+  #   table:
+  #     exclude:
+  #       - account_stg
+  #       - human_resources_stg
+
+  setup:
+    build: ../_builds/{setup_file.stem}/{current_date:%Y}/{current_date:%b}/{current_date:%d_%a}
+    # {now():%Y}/reports/{now():%B}/{now():%d}
+    environment: ERPMPA
+    table:
+      attribute:
+        count: 15
+        type: varchar2
+        length: 250
+      segment: 15
+
+    deployment:
+      # oaf: false
+      # bounce: false
+      aol: false
+      sql: true
+      # environment: erpmpa
+      # readme: ./readme.md
+
+  environment:
+    ERPMPA:
+      name: ERPMPA_NEWISH
+      host: svdt6pca1dev02
+      home: ~/dkibetu/{current_date:%Y}/{setup_file.stem}/{current_date:%B}/{current_date:%d}
+      file: ~/EBSapps.env
+
+
+  aol:
+    # general:
+    #   - object: XXSFC_CE01_%
+    #     type:
+    #       - lookup
+    #       - value_set
+    #       - lookup_dff
+    # - menu
+    # - responsibility
+    # - request_group
+
+    #   - object: XXSFC_TML_%
+    #     type:
+    #       - BNE_INTEGRATOR
+    #   - object: BNE_XXSFC_TML_ACCOUNT
+    #     type:
+    #       - function
+
+    special:
+      - package:
+          application: APPS
+          object:
+            - XXSFC_HR_GENERAL_REPORTS
+            # - XXSFC_E301_OT_APPR_PKG
+      - program:
+          object:
+            # - XXSFC_PER_GRA01_STAFF_MOVEMENT:
+            #     type: xml
+            #     layout: true
+            #     template: true
+            # - XXSFC_OTL_DETAIL_ANALYSIS:
+            #     type: xml
+            #     layout: true
+            #     template: true
+            - XXSFC_CE01_PAYROLL_RUN_VARIANCE:
+                type: xml
+                layout: true
+                template: true
+
+# --------------------------------------------------------------------------------
+# Designed by DKibetu
+# --------------------------------------------------------------------------------
+tables:
+  payroll_run:
+    constraints:
+      payroll_run_pk:
+        type: primary key
+        columns:
+          - view_type
+          - request_id
+          - payroll_id
+          - run_result_id
+          - time_period_id
+          - assignment_id
+          - element_type_id
+
+    columns:
+      view_type : 
+        type: varchar2
+        length: 50 
+        nullable: false
+      request_id:
+        type: number
+        nullable: false
+      classification_name:
+        type: varchar2
+        length: 80
+        nullable : false
+      element_name:
+        type: varchar2
+        length: 80
+        nullable : false
+      reporting_name:
+        type: varchar2
+        length: 80
+        nullable : true
+      element_type_id:
+        type: number
+        length: 22
+        nullable : false
+        precision: 9
+      input_value_id:
+        type: number
+        length: 22
+        nullable : false
+        precision: 9
+      run_result_id:
+        type: number
+        length: 22
+        nullable : false
+        precision: 15
+      result_value:
+        type: varchar2
+        length: 60
+        nullable : true
+      name:
+        type: varchar2
+        length: 80
+        nullable : false
+      display_sequence:
+        type: number
+        length: 22
+        nullable : false
+        precision: 5
+      assignment_action_id:
+        type: number
+        length: 22
+        nullable : false
+        precision: 15
+      assignment_id:
+        type: number
+        length: 22
+        nullable : true
+        precision: 10
+      element_entry_id:
+        type: number
+        length: 22
+        nullable : true
+        precision: 15
+      assignment_number:
+        type: varchar2
+        length: 30
+        nullable : true
+      person_id:
+        type: number
+        length: 22
+        nullable : false
+        precision: 10
+      organization_id:
+        type: number
+      period_of_service_id:
+        type: number
+      object_version_number:
+        type: number
+      position_id:
+        type: number
+      payroll_action_id:
+        type: number
+        length: 22
+        nullable : false
+        precision: 15
+      action_type:
+        type: varchar2
+        length: 30
+        nullable : false
+      payroll_id:
+        type: number
+        length: 22
+        nullable : true
+        precision: 9
+      payroll_name:
+        type: varchar2
+        length: 80
+        nullable : false
+      payroll_period_type:
+        type: varchar2
+        length: 30
+        nullable : false
+      business_group_id:
+        type: number
+        length: 22
+        nullable : false
+        precision: 15
+      assignment_set_id:
+        type: number
+        length: 22
+        nullable : true
+        precision: 15
+      assignment_set_name:
+        type: varchar2
+        length: 80
+        nullable : true
+      date_earned:
+        type: date
+        length: 7
+        nullable : true
+      display_run_number:
+        type: number
+        length: 22
+        nullable : true
+        precision: 10
+      time_period_id:
+        type: number
+        length: 22
+        nullable : true
+        precision: 15
+      previous_time_period_id:
+        type: number
+        length: 22
+        nullable : true
+      payroll_month:
+        type: varchar2
+        length: 17
+        nullable : true
+      payroll_period:
+        type: date
+        length: 7
+        nullable : false

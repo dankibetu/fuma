@@ -1,0 +1,147 @@
+oracle:
+  who:
+    created_by:
+      type: number
+      default: -1
+    last_updated_by:
+      type: number
+      default: -1
+    last_update_login:
+      type: number
+      default: -1
+    creation_date:
+      type: date
+      default: sysdate
+    last_update_date:
+      type: date
+      default: sysdate
+
+  extra:
+    attribute_category:
+      type: varchar2
+      length: 200
+    segment:
+      type: number
+      count: 30
+    attribute:
+      type: varchar2
+      length: 100
+      count: 30
+
+  validation:
+    name : ^[a-z][a-z_0-9]{1,29}$
+
+  types:
+    char:
+      description: Fixed length character with a length of size.
+      format:
+        - "{name:<30s} {type}({length})"
+      validate:
+        name:
+          mandatory: true
+          regexp: ^[a-z][a-z_0-9]{1,29}$
+        type:
+          mandatory: true
+          regexp: ^[a-z][a-z_0-9]+$
+        length:
+          mandatory: true
+          min: 1
+          max: 2000
+          regexp: ^\d+$
+      default:
+        quote: "'"
+        format: "default '{value}'"
+        regexp:
+          - '^[\w\W]{{0,{length}}}$'
+
+    varchar2:
+      description: Variable length character string with a maximum length of size bytes.
+      format:
+        - "{name:<30s} {type}({length})"
+      validate:
+        name:
+          mandatory: true
+          regexp: ^[a-z][a-z_0-9]{1,29}$
+        type:
+          mandatory: true
+          regexp: ^[a-z][a-z_0-9]+$
+        length:
+          mandatory: true
+          min: 1
+          max: 4000
+          regexp: ^\d+$
+      default:
+        quote: "'"
+        format: "default '{value}'"
+        regexp:
+          - '^[\w\W]{{0,{length}}}$'
+
+    number:
+      description: Numeric data, with a precision of p and scale of s.
+      validate:
+        name:
+          mandatory: true
+          regexp: "^[a-z][a-z_0-9]{1,29}$"
+        type:
+          mandatory: true
+          regexp: "^[a-z][a-z_0-9]+$"
+        precision:
+          mandatory: false
+          min: 1
+          max: 38
+          regexp: '^\d+$'
+        scale:
+          mandatory: false
+          min: -84
+          max: 127
+          regexp: '^[-+]?[\d]+$'
+      format:
+        - "{name:<30s} {type}"
+        - "{name:<30s} {type}({precision})"
+        - "{name:<30s} {type}({precision},{scale})"
+      default:
+        format: "default {value}"
+        regexp:
+          - '^[-+]?[\d]+[.]?[\d]{0,}$'
+
+    date:
+      description: A date value that stores time as well
+      validate:
+        name:
+          mandatory: true
+          regexp: "^[a-z][a-z_0-9]{1,29}$"
+        type:
+          mandatory: true
+          regexp: "^[a-z][a-z_0-9]+$"
+      format:
+        - "{name:<30s} {type}"
+      default:
+        format: "default {value}"
+        regexp:
+          - ^(\d{2}-(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)-(\d{2}|\d{4}))$
+          - ^(sysdate)$
+          - ^(to_date\s{0,}\(\s{0,}\'(.*(?=\'\s{0,},))\'\s{0,},\s{0,}\'(.*(?=\'\s{0,}\)))\'\s{0,}\))$
+
+    blob:
+      description: Stores large unstructured binary objects
+      validate:
+        name:
+          mandatory: true
+          regexp: "^[a-z][a-z_0-9]{1,29}$"
+        type:
+          mandatory: true
+          regexp: "^[a-z][a-z_0-9]+$"
+      format:
+        - "{name:<30s} {type}"
+
+    clob:
+      description: Stores large unstructured binary objects
+      validate:
+        name:
+          mandatory: true
+          regexp: "^[a-z][a-z_0-9]{1,29}$"
+        type:
+          mandatory: true
+          regexp: "^[a-z][a-z_0-9]+$"
+      format:
+        - "{name:<30s} {type}"

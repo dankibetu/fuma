@@ -1,0 +1,20 @@
+ERPDATA:
+  DB:
+    username: apps
+  OS:
+    username: oradata
+    env_file: ~/APPSERPDATA_svdt5erpdata.env
+    root : ~/dkibetu
+
+ERPTEST:
+  DB:
+    username: apps
+  OS:
+    username: oradev
+    env_file: ~/APPSERPTEST_svdt5erpdev.env
+    root : ~/dkibetu
+
+# keyring.set_password('ERPDATA_OS','oradata','PlanningErpData124!')
+# keyring.set_password('ERPDATA_DB','apps','swara321')
+# keyring.set_password('ERPTEST_OS','oradev','Covid19_2021!123')
+# keyring.set_password('ERPTEST_DB','apps','swara321')

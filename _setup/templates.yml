@@ -1,0 +1,402 @@
+table : |+
+  {drop_pk}alter table {schema}.{accronym}_{table} drop primary key cascade;
+
+  {comment}drop table {schema}.{accronym}_{table} cascade constraints;
+
+  create table {schema}.{accronym}_{table}(
+    {columns}
+  );
+
+init data : |+
+  INSERT INTO {schema}.{accronym}_{table} 
+  (
+    {columns}
+  )
+  VALUES(
+    {values}
+  );
+  
+truncate table : |+
+  {comment}TRUNCATE TABLE {schema}.{accronym}_{table};
+data structure : |+
+  -----------------------------------------------------------------------
+  --- 
+  ---  Initialization data (Oracle Database) 
+  ---  @Author    : Daniel Kibetu <dkibetu@safaricom.co.ke>
+  ---  @Version   : {version}                            
+  ---  @Timestamp : {time_generated}
+  ---
+  ----------------------------------------------------------------------
+
+  SET DEFINE OFF;
+  
+  {truncate}
+  {records}
+
+  {comment}COMMIT;
+
+  {plsql}
+
+sequence : |+
+  {comment}drop sequence {schema}.{accronym}_{name}  ;
+
+  create sequence {schema}.{accronym}_{name} start with {start} increment by {increment};
+
+directory : |+
+  create or replace directory {name} as '{path}';
+
+foreign key : |+
+  alter table {schema}.{accronym}_{table}
+    add constraint {name} foreign key ({child_columns}) 
+    references {parent_table} ({parent_columns}) {restrict};
+
+primary key : |+
+  alter table {schema}.{accronym}_{table}
+     add constraint {name} primary key ({columns});
+
+synonym : |+
+  create or replace public synonym {accronym}_{table}
+     for {schema}.{accronym}_{table};
+     
+index : |+
+  create {type} index {schema}.{short name}_{table}_{name} on {schema}.{accronym}_{table} ({columns});
+
+xml_importer : |+
+  java oracle.jrad.tools.xml.importer.XMLImporter $JAVA_TOP{file} -username "${{username}}" -password "${{pass}}" -dbconnection "${{tns_entry}}" -rootdir $JAVA_TOP;
+
+plsql value : |+
+  {label:<30} => {value}
+plsql procedure : |+
+  {package}.{procedure}(
+     {records});
+
+plsql block : |+
+  BEGIN
+  -- --------------- [begin blocks] ----------------------
+
+  {blocks}
+  COMMIT;
+  EXCEPTION 
+    WHEN OTHERS 
+      THEN
+        DBMS_OUTPUT.put_line (SQLERRM);
+        DBMS_OUTPUT.put_line (DBMS_UTILITY.format_error_backtrace);
+
+        ROLLBACK;
+        RAISE;
+  END;
+
+
+shell_script: |+
+ #!/usr/bin/env bash
+ #| ------------------------------------------- | 
+ #| -- OAF Project Deployment Script            |
+ #| -- Author  : DKibetu@Safaricom.co.ke        |
+ #| -- Version : 2.0.5 [22-FEB-2019]            |
+ #| -- Created : {time_generated}           |
+ #| ------------------------------------------- |
+
+ usage () {{
+    cat <<HELP_USAGE
+    $0  [<full|partial>] | <bounce>
+
+    full    - deploy OAF solution and register XML on MDS
+    partial - deploy OAF solution, XML files are not registered on MDS
+    bounce  - bounce appache server
+   
+ HELP_USAGE
+ exit 0
+ }}
+
+
+  Red='\033[0;31m';          # Red
+  Green='\033[0;32m';        # Green
+  NC='\033[0m';              # No color
+  Blue='\033[0;34m';         # Blue
+  Yellow='\033[0;33m';       # Yellow
+
+  for var in "$@"; do
+    if  [[ "${{var}}" =~ ^(full)|(partial)$ ]]; then
+      if [ -z "${{deployment_mode}}" ]; then
+        deployment_mode="${{var}}";
+      else
+         printf "%b \n" "${{Red}}Invalid invoke.${{NC}}";
+         usage;
+         exit 1;
+      fi
+    elif [[ "${{var}}" =~ ^(bounce)$ ]]; then
+       if [ -z "${{bounce_server}}" ]; then
+        bounce_server="${{var}}";
+      else
+         printf "%b \n" "${{Red}}Invalid invoke.${{NC}}";
+         usage;
+         exit 1;
+      fi
+    else
+      printf "%b \n" "${{Red}}Invalid invoke.${{NC}}";
+      usage;
+      exit 1;
+    fi
+  done
+
+  if [ -z "${{deployment_mode}}" ] && [ -z "${{bounce_server}}" ]; then
+    printf "%b \n" "${{Red}}Invalid invoke...${{NC}}";
+    usage;
+    exit 1;
+  fi
+
+  usr=$(whoami);
+
+  case "${{usr}}" in
+    oraappl|oraprep)
+      environment="ERP PREP";
+      pass="{APPS-PREP}";
+      # username="apps";
+      # instance="ERPPREP";
+    ;;
+    oradat|oradata)
+      environment="ERP DATA";
+      pass="{APPS-DATA}";
+      # username="apps";
+      # instance="ERPDATA";
+    ;;
+    oradev)
+      environment="ERP DEV";
+      pass="{APPS-DEV}";
+      # username="apps";
+      # instance="ERPDEV"
+    ;;
+     applprod)
+     environment="ERP PROD";
+     pass="";
+     # username="apps";
+     # instance="ERPPROD6";
+    ;;
+    *)
+      pass="";
+      environment="?";
+    ;;
+  esac
+  
+  username="apps"
+
+  # check if password is set
+
+  if [ -z "${{pass}}" ]; then
+      printf "%b" "${{Green}}Enter APPS PASSWORD [${{environment}}] : ${{NC}}";
+      read -s pass;
+      printf "\n";
+
+      if [ -z "${{pass}}" ]; then
+        printf "%b \n" "${{Red}}You did not enter password. Exiting ...${{NC}}";
+        printf "\n";
+        printf "\n";
+        exit 1;
+      fi
+  fi
+
+  # check if password is valid
+  instance=$(sqlplus -S ${{username}}/${{pass}} << EOF | grep INSTANCE | sed 's/INSTANCE//;s/[ ]//g'
+      set head off
+      set feedback off
+      set pagesize 5000
+      set linesize 30000
+      select 'INSTANCE', instance_name from v\$instance; 
+      exit
+ EOF
+  );
+
+  # echo 'exit' | sqlplus ${{username}}/${{pass}}@${{tns_entry}} | grep Connected > /dev/null;
+
+  if [ -z "${{instance}}" ];
+    then 
+      printf "%b" "${{Red}}Could not establish database connection : [${{environment}}]. Check your login details. \nExiting... ${{NC}}";
+      printf "\n";
+      exit 1;
+    else
+      environment=$instance;
+      printf "%b" "${{Green}}Connection Established : [${{environment}}] ${{NC}}";
+      printf "\n";
+  fi
+
+  # check if environment is captured
+  
+  if [ -z "${{environment}}" ]; then
+    printf "%b \n" "${{Red}}Unknown Environment, exiting ...${{NC}}";
+    exit 1;
+  fi
+
+  printf "%b" "${{Green}}Resolving connection using net entry name '${{instance}}'${{NC}}\n";
+
+  lsearch='(\(DESC.+\))\s+(OK.+)';
+  lres=$(tnsping $instance 2>&1);
+  [[ "$lres" =~ $lsearch ]];
+
+  tns_entry=${{BASH_REMATCH[1]}};
+  status=${{BASH_REMATCH[2]}};
+
+  tns_entry=$(echo -e "${{tns_entry}}" | tr -d '[:space:]');
+
+  if [[ $lres != *OK* ]]; then
+      printf "%b" "${{Red}}${{lres}}\nExiting... ${{NC}}";
+      printf "\n";
+      exit 1;
+  fi
+
+  if [ -z "${{JAVA_TOP}}" ]; then
+    printf "%b \n" "${{Red}}Please set ${{environment}} Environment Variables. \n\tExiting...${{NC}}";
+    printf "\n";
+    exit 1;
+  fi
+
+  # check if password is set
+  
+  # if [ -z "${{pass}}" ]; then
+  #   printf "%b" "${{Green}}Enter APPS PASSWORD [${{environment}}] : ${{NC}}";
+  #   read -s pass;
+  #   printf "\n";
+
+  #   if [ -z "${{pass}}" ]; then
+  #     printf "%b \n" "${{Red}}You did not enter password. Exiting ...${{NC}}";
+  #     exit 1;
+  #   fi
+  # fi
+  
+  # # check if password is valid
+
+  # echo 'exit' | sqlplus ${{username}}/${{pass}}@${{tns_entry}} | grep Connected > /dev/null;
+
+  # if [ $? -eq 0 ] 
+  #   then
+  #     printf "%b \n" "${{Green}}Connection Established : [${{environment}}] ${{NC}}";
+  #   else
+  #     printf "%b \n" "${{Red}}Could not establish database connection : [${{environment}}]. Check your login details. \nExiting... ${{NC}}";
+  #     exit 1;
+  # fi
+
+  # Check if deployment mode is set
+
+  if [ -n "${{deployment_mode}}" ]; then
+    ftop="$JAVA_TOP/{project}"
+    solution="{zip_file}"
+
+    if [ ! -e "$ftop" ]; then
+      mkdir $ftop;
+      chmod 777 $ftop;
+    fi
+
+    if [ ! -f "${{solution}}.zip" ]; then
+      printf "%b \n" "${{Red}}Archive '${{solution}}.zip' does not exist. Exiting ${{NC}}";
+      exit 1;
+    fi
+
+    printf "%b" "${{Yellow}} \nEverything checks out, Do you want to proceed with the Deployment? [Y/N] :  ${{NC}}";
+    read affirm;
+
+    if [[ "${{affirm,,}}" != "y" ]] ;then
+        printf "%b \n" "${{Red}}Deployment Cancelled. Exiting ...${{NC}}";
+        printf "\n";
+        printf "\n";
+        exit 1;
+    fi
+
+    
+    rm -f $ftop/${{solution}}.zip;
+    rm -rf $ftop/${{solution}};
+
+    printf "%b \n" "Deploying ${{solution}}...${{Green}} ";
+
+    cp -v -f ${{solution}}.zip $ftop
+    unzip -q -o $ftop/${{solution}}.zip -d $ftop;
+    rm -f $ftop/${{solution}}.zip;
+    printf "%b \n" "${{NC}}Complete";
+  fi
+
+  xml_imports=({FILES}
+  )
+  
+  if [ "${{deployment_mode}}" == "full" ]; then
+
+     printf "%b \n" "${{Green}}Registering XML files to MDS...${{NC}}";
+
+    for xml_file in "${{xml_imports[@]}}"; do
+      if [ -f "${{JAVA_TOP}}${{xml_file}}" ]; then
+          echo "Importing file : ${{xml_file}}";
+          res=$(java oracle.jrad.tools.xml.importer.XMLImporter "${{JAVA_TOP}}${{xml_file}}" -username "${{username}}" -password "${{pass}}" -dbconnection "${{tns_entry}}" -rootdir $JAVA_TOP 2>&1);
+          
+          if [[ "${{res}}" == *"Import completed"* ]]; then
+            printf "%b \n" "${{Green}}${{res}}${{NC}}";
+          else
+            printf "%b \n" "${{Red}}${{res}}${{NC}}";
+            exit 1;
+          fi
+        else
+          printf "%b \n" "${{Red}}FILE MISSING : ${{JAVA_TOP}}${{xml_file}}${{NC}}";
+      fi
+    done
+  fi
+
+  if [ "${{bounce_server}}" == "bounce" ]; then
+
+    printf "%b \n" "${{Green}}Bouncing Apache Server...${{NC}}";
+
+    res=$(sh $INST_TOP/admin/scripts/adoacorectl.sh stop 2>&1);
+    if [[ "${{res}}" == *"status 0"* ]]; then
+      printf "%b \n" "${{Green}}${{environment}} : stopped ${{NC}}\n";
+      sres=$(sh $INST_TOP/admin/scripts/adoacorectl.sh start 2>&1);
+      if [[ "${{sres}}" == *"status 0"* ]]; then
+        printf "%b \n" "${{Green}}${{environment}} : started ${{NC}}";
+      else
+        printf "%b \n" "${{Red}}Could not start ${{environment}} services\n\n${{sres}}${{NC}}\n";
+      fi 
+    else
+      printf "%b \n" "${{Red}}Could not stop ${{environment}} services\n\n${{res}}${{NC}}\n";
+    fi
+  fi
+ 
+file format : |
+  -----------------------------------------------------------------------
+  --- 
+  ---  Database Objects (Oracle Database) 
+  ---  @Author    : Daniel Kibetu <dkibetu@safaricom.co.ke>
+  ---  @Version   : {version}                              
+  ---  @Timestamp : {time_generated}
+  ---
+  ----------------------------------------------------------------------
+  
+  {directories}
+  
+  ---------------------- tables ----------------------------
+
+  {tables}
+
+
+  --------------------- constraints -------------------------
+  
+  {primary_key}
+
+  {constraints}
+
+  ---------------------- sequences --------------------------
+
+  {sequences}
+
+  ---------------------- indexes  ---------------------------
+
+  {indexes}
+
+  --------------------- synonyms -----------------------------
+  {synonyms}
+  
+  --------------------- Triggers -----------------------------
+  
+  {triggers}
+
+  /
+  
+  show errors;
+  
+
+
+field format : |+
+    {column:<30} {type}{left_brace}{length}{right_brace} {column_attribute} {default_placeholder} {default}

@@ -1,0 +1,9 @@
+colorama==0.4.6
+halo==0.0.31
+keyring==23.13.1
+lxml==4.9.2
+paramiko==3.1.0
+PyYAML==6.0
+ruamel.base==1.0.0
+scp==0.14.5
+yamlordereddictloader==0.4.0
