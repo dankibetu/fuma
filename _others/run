@@ -1,2 +1,0 @@
-@REM Iterate through the folder and generate database files
-for /r %%i in (*.yml) do python %AUTO_DEPLOY% -f %%i
