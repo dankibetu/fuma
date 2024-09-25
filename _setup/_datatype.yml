@@ -20,13 +20,38 @@ oracle:
     attribute_category:
       type: varchar2
       length: 200
+    attribute:
+      type: varchar2
+      length: 150
+      count: 30
     segment:
       type: number
       count: 30
-    attribute:
+    information:
+      type: date 
+      count : 0
+    # Additional custom fields that a user may need. 
+    # The idea is to ensure that multiple attributes can be included in the table generation
+    custom1:
       type: varchar2
-      length: 100
-      count: 30
+      length: 150 
+      count : 0
+    custom2:
+      type: varchar2
+      length: 150 
+      count : 0
+    custom3:
+      type: varchar2
+      length: 150 
+      count : 0
+    custom4:
+      type: varchar2
+      length: 150 
+      count : 0
+    custom5:
+      type: varchar2
+      length: 150 
+      count : 0
 
   validation:
     name : ^[a-z][a-z_0-9]{1,29}$

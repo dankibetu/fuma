@@ -151,7 +151,7 @@ shell:
       );
 
       style="{deploy_style}";
-      
+
       archive_file="{archive_file}";
       archive_type="{archive_type}";
       solution="{solution}";
@@ -324,13 +324,13 @@ shell:
           rm -rf $ftop/${solution};
 
           cp -v -f ${archive_file} $ftop;
-      
+
           if [[ "${archive_type,,}" == "zip" ]] ;then
             unzip -q -o $ftop/${archive_file} -d $ftop;
           else
             tar xf $ftop/${archive_file} -C $ftop;
           fi
-      
+
           rm -f $ftop/${archive_file};
 
         else 
