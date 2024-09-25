@@ -11,7 +11,7 @@ usage () {
     cat <<HELP_USAGE
     $0 <-o|--object> <-n|--name>+ [ <-a|--application> ] 
         [ <-r|--alias> ] [ <-t|--transaction> ] [ <-f|--flavour> ]
-        [ -e|--flexfield ]
+        [ <-e|--flexfield> ]
     
     parameters :
     =================================================================
@@ -23,6 +23,7 @@ usage () {
       -f|--flavour          : Program flavour <RDF|HOST>
       -c|--context          : Flexfield Context
       -u|--user             : User/Schema
+      -e|--flexfield        : flexfield Name
       
 HELP_USAGE
  exit 0
@@ -56,6 +57,10 @@ while (( "$#" )); do
         ;;
         -c|--context)
             flex_name="${2}";
+            shift 2
+        ;;
+        -e|--flexfield)
+            dff_name="${2}";
             shift 2
         ;;
         -f|--flavour)
@@ -657,7 +662,7 @@ for paol in "${aols[@]}"; do
             DFF)
                 tout=$(echo "${object// /_}" | tr '[:lower:]' '[:upper:]');
                 out_file="${ldt_dir}/03_EIT_${tout}";
-                result=$(FNDLOAD apps/$pass O Y DOWNLOAD $FND_TOP/patch/115/import/afffload.lct "${out_file}.ldt" DESC_FLEX P_LEVEL=:"COL_ALL:FQL_ALL:SQL_ALL:STR_ONE:WFP_ALL:SHA_ALL:CVR_ALL:SEG_ALL" APPLICATION_SHORT_NAME="${app}" DESCRIPTIVE_FLEXFIELD_NAME="${flex_name}" DESCRIPTIVE_FLEX_CONTEXT_CODE="${object}" 2>&1);
+                result=$(FNDLOAD apps/$pass O Y DOWNLOAD $FND_TOP/patch/115/import/afffload.lct "${out_file}.ldt" DESC_FLEX P_LEVEL=:"COL_ALL:FQL_ALL:SQL_ALL:STR_ONE:WFP_ALL:SHA_ALL:CVR_ALL:SEG_ALL" APPLICATION_SHORT_NAME="${app}" DESCRIPTIVE_FLEXFIELD_NAME="${dff_name}" DESCRIPTIVE_FLEX_CONTEXT_CODE="${object}" 2>&1);
                 parseResult "${result}" "${out_file}"; 
                 deploymentLDT  "${out_file}";
             

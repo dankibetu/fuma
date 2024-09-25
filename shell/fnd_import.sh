@@ -102,31 +102,34 @@ username="apps";
 #   echo -e "${NC}";
 # done
 
- case "${usr}" in
-   # oraappl|oraprep)
-   #   environment="ERP PREP";
-   #   pass="swar148";
-   # ;;
-   oradat*)
-     environment="ERP DATA";
-     pass="Swara321";
-   ;;
-   oradev)
-     environment="ERP DEV";
-     pass="swara321";
-   ;;
-    applprod)
-     environment="ERP PROD";
-     pass="";
-   ;;
-   *)
-     environment="${DK_AU_ENV}";
-     pass="${DK_AU_PASS}";
-   ;;
- esac
+#  case "${usr}" in
+#    # oraappl|oraprep)
+#    #   environment="ERP PREP";
+#    #   pass="swar148";
+#    # ;;
+#    oradat*)
+#      environment="ERP DATA";
+#      pass="Swara321";
+#    ;;
+#    oradev)
+#      environment="ERP DEV";
+#      pass="swara321";
+#    ;;
+#     applprod)
+#      environment="ERP PROD";
+#      pass="";
+#    ;;
+#    *)
+#      environment="${DK_AU_ENV}";
+#      pass="${DK_AU_PASS}";
+#    ;;
+#  esac
 
+environment="${DK_AU_ENV}";
+pass="${DK_AU_PASS}"
 username="apps";
 app="XXSFC";
+
 # check if password is set
 
 if [ -z "${pass}" ]; then
@@ -231,7 +234,8 @@ else
     if [[ $ldt_path == *.zip ]]; then
       unzip -q -o $ldt_path -d $temp_source;
     else
-      tar xf $ldt_path -C $temp_source;
+      cd "${temp_source}";
+      tar xf "${ldt_path}";
     fi
 
     ldt_path="${temp_source}";
@@ -399,7 +403,7 @@ for f in `ls $ldt_path | grep "^[0-9]" | grep -v ".log$" | sort -n`; do
           # exit 0;
         fi
 
-        res=$(java oracle.apps.xdo.oa.util.XDOLoader UPLOAD -DB_USERNAME apps -DB_PASSWORD "${pass}" -JDBC_CONNECTION "${tns_entry}" -LOB_TYPE "${xdo[2]}" -LOB_CODE "${xdo[3]}" -XDO_FILE_TYPE "${xdo[4]}" -LANGUAGE "${xdo[5]}" -TERRITORY "${xdo[6]}" -FILE_NAME $xdofile -APPS_SHORT_NAME "${xdo[1]}" -LOG_FILE "${logpath}/${log_file}" 2>&1);
+        res=$(java oracle.apps.xdo.oa.util.XDOLoader UPLOAD -DB_USERNAME apps -DB_PASSWORD "${pass}" -JDBC_CONNECTION "${tns_entry}" -LOB_TYPE "${xdo[2]}" -LOB_CODE "${xdo[3]}" -XDO_FILE_TYPE "${xdo[4]}" -LANGUAGE "${xdo[5]}" -TERRITORY "${xdo[6]}" -FILE_NAME $xdofile -APPS_SHORT_NAME "${xdo[1]}" -LOG_FILE "${logpath}/${log_file}" -CUSTOM_MODE FORCE 2>&1);
         # echo $res;
 
         echo -e "${Blue}[COMPLETE]${NC} : ${Green}log file : ${log_file}${NC}";
