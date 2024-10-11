@@ -18,10 +18,11 @@ from colorama import Fore, Style
 from keyring import get_credential
 from lxml import etree
 from paramiko import SSHClient, AutoAddPolicy
-from scp import SCPClient
+from scp import SCPClient, SCPException
 from yamlordereddictloader import Loader
 import tarfile
 import sys
+import socket
 
 current_date = datetime.now()
 setup_file = Path
@@ -758,6 +759,8 @@ class AOL(LoggingHandler):
                     f"export pass='{db_pwd}'",
                     f"export out_dir='{ldt}'",
                     f"rm -rf {_zip_name}",
+                    # f"sed -i 's/\\r$//' {self.out_file.name}",
+                    # f'tr -d "\\r" < {self.out_file.name} > {self.out_file.name}',
                     f"{self.shell_type} {self.out_file.name}",
                     f"cd {ldt}",
                     archive_command(self.archive_type, 'c', Path(f'../{ldt}').as_posix(), '.'),
@@ -779,17 +782,23 @@ class AOL(LoggingHandler):
 
                 for retry in range(self.max_download_reries):
                     ssh_spinner.start()
+                    retry_delay = 10
                     try:
-                        with SCPClient(con.get_transport(), progress=ssh_progress) as scp:
+                        with SCPClient(con.get_transport(), progress=ssh_progress, socket_timeout=300) as scp:
                             scp.get(ldt_zip, _target)
                             ssh_spinner.succeed(f"Download Successful. File saved as {_target}")
                             break
-                    except Exception as shex:
+                    except (SCPException, socket.timeout) as e:
+                        # print(f"Error: {e}. Retrying in {retry_delay} seconds...")
                         if retry == self.max_download_reries:
                             ssh_spinner.fail(f"Download failed after {self.max_download_reries} attempts.")
                         else:
                             ssh_spinner.warn(
-                                f"Error occurred : {shex}. Retrying... {retry + 1} of {self.max_download_reries} attempts")
+                                f"Error occurred : {shex}. Retrying in {retry_delay} seconds... {retry + 1} of {self.max_download_reries} attempts")
+                            time.sleep(retry_delay)
+                    except Exception as shex:
+                        ssh_spinner.fail(f"Download failed")
+                       
                     ssh_spinner.stop_and_persist()
 
                 if self.cleanup:
