@@ -7,9 +7,9 @@ set fuma_dir="%cd%"
 set env_db_user=APPS
 
 if not defined %fuma_env% (
-    setx %fuma_env% %fuma_dir%
-    setx FUMA %fuma_dir%\Fuma.py -f
-    setx FUMA_SECURE %fuma_dir%\secure\credentials.py
+    setx %fuma_env% "%fuma_dir%"
+    setx FUMA "%FUMA_DIRECTORY%\Fuma.py -f"
+    setx FUMA_SECURE "%FUMA_DIRECTORY%\secure\credentials.py"
 )
 echo -------------------------------------------------------------------------
 echo setting environment Variables
@@ -25,7 +25,7 @@ color
 echo setting up credentials
 echo =============================================================================
 color b
-python %fuma_dir%\secure\credentials.py -a set 
+@rem python %fuma_dir%\secure\credentials.py -a set 
 color 
 echo =============================================================================
 @rem echo running tests
