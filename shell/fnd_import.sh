@@ -338,6 +338,7 @@ set linesize 1000
 set pagesize 0
 set trimspool on
 set headsep off
+set define off
 @${1};
 
 EXIT;

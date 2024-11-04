@@ -320,6 +320,20 @@ shell:
 
         if [ "${style}" == "full" ]; then
         
+
+          if [ -d "$ftop/$solution" ]; then
+              # Generate a timestamp in the format YYYYMMDD_HHMMSS
+              timestamp=$(date +"%Y%m%d_%H%M%S")
+
+              # Create a timestamped archive file name
+              archive_name="${timestamp}_${archive_file}"
+
+              # Create a tar.gz archive of the solution directory
+              tar czf "$ftop/$archive_name" -C "$ftop" "$solution"
+
+              echo "backup created: $ftop/$archive_name"
+          fi
+
           rm -f $ftop/${archive_file};
           rm -rf $ftop/${solution};
 
@@ -335,11 +349,13 @@ shell:
 
         else 
           working_dir=$(pwd)"/${style}";
+          mkdir -p "${working_dir}";
           
           if [[ "${archive_type,,}" == "zip" ]] ;then
             unzip -q -o ./"${archive_file}" -d $working_dir;
           else
-            tar xf ./"${archive_file}" -C $working_dir;
+            cd "${working_dir}";
+            tar xf "../${archive_file}";
           fi
           
           for pdir in "${structure_dirs[@]}"; do 
@@ -350,18 +366,29 @@ shell:
             src="${working_dir}"${pfile##$project};
             dst="${JAVA_TOP}/${pfile}"
             
-            
+          # Check if the destination file exists
+            if [ -e "$dst" ]; then
+                # Generate a timestamp in the format YYYYMMDD_HHMMSS
+                timestamp=$(date +"%Y%m%d_%H%M%S")
+                
+                # Create a backup of the destination file with a timestamp
+                backup_dst="${dst}.${timestamp}.bak"
+                cp -f "${dst}" "${backup_dst}"
+                
+                echo "[Backup created]: ${backup_dst}"
+            fi  
+
             mv -f "${src}" "${dst}";
             echo "[+] ${pfile}";
           done
           
-          rm -rf "${working_dir}";
+          # rm -rf "${working_dir}";
         fi
         
         printf "%b \n" "${NC}Complete";
       fi
 
-      if [[ ( "${deployment_mode}" == "full" ) && ( "${#xml_imports[@]}" -gt 0 ) ]]; then
+      if [[ ( "${#xml_imports[@]}" -gt 0 ) ]]; then
 
           printf "%b \n" "${Green}Registering XML files to MDS...${NC}";
 
@@ -377,8 +404,7 @@ shell:
                 exit 1;
               fi
 
-              rm -f "${JAVA_TOP}/${xml_file}";
-              
+              # rm -f "${JAVA_TOP}/${xml_file}";
 
             else
               printf "%b \n" "${Red}FILE MISSING : ${JAVA_TOP}/${xml_file}${NC}";

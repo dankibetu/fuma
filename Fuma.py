@@ -1,4 +1,5 @@
 import os
+import traceback
 import re
 import shutil
 import threading
@@ -108,6 +109,7 @@ class OAF(LoggingHandler):
     package = None
     current_date = datetime.now()
     yaml_file = None
+    build_oaf = False
 
     max_backups = 10
     workspace = None
@@ -142,36 +144,22 @@ class OAF(LoggingHandler):
             _env = detail.get("environment", {}).get(_key)
 
             if not (detail.get('oaf') and _setup.get("deployment", {}).get("oaf")):
-                return
-
+                build_oaf = detail.get('oaf') != None
+                if not build_oaf:
+                    return
+                
+            build_oaf = True
             self.package = detail['oaf']['package'].format(**detail['oaf'])
             _wd = self.package.split('.')
             self.workspace = self.jdev_home.joinpath(*_wd)
+            # print(self.workspace )
 
-            for _dir in detail['oaf'].get('include', []):
-                if isinstance(_dir, str):
-                    self.include.append(
-                        self.workspace.joinpath(*_dir.split('.')))
-                else:
-                    for _subdir in _dir:
-                        _path = self.workspace.joinpath(*_subdir.split('.'))
-                        for _ix in _dir[_subdir]:
-                            [self.include.append(_if)
-                             for _if in _path.rglob(_ix)]
+            for _path in detail['oaf'].get('include', []):
+                self.include.extend(self.file_path(_path,self.workspace))
 
-            for _dir in detail['oaf'].get('exclude', []):
-                if isinstance(_dir, str):
-                    self.exclude.append(
-                        self.workspace.joinpath(*_dir.split('.')))
+            for _path in detail['oaf'].get('exclude', []):
+                self.exclude.extend(self.file_path(_path,self.workspace))
 
-                else:
-                    for _subdir in _dir:
-                        # print(self.workspace,_subdir.split('.'))
-                        _path = self.workspace.joinpath(*_subdir.split('.'))
-                        # print(_path)
-                        for _ix in _dir[_subdir]:
-                            [self.exclude.append(_if)
-                             for _if in _path.rglob(_ix)]
 
             # -------------
             self.shell_type = _env.get('shell', __shell_type__)
@@ -198,8 +186,8 @@ class OAF(LoggingHandler):
                 'struct_folders': _structure['folder'],
                 'struct_files': _structure['file'],
                 'deploy_style': _style,
-                'archive_file': self.archive.name
-                , 'archive_type': 'tar' if self.archive_type.split('.') in ('tar', 'tgz') else self.archive
+                'archive_file': self.archive.name,
+                'archive_type': 'tar' if 'tar' in self.archive_type.split('.')  else self.archive_type 
             }
 
             self.log.info(f"environment : {_key}, ({_env})")
@@ -216,11 +204,42 @@ class OAF(LoggingHandler):
 
 
         except Exception as oe:
+            traceback.print_exc()
             print("{color}{msg}{rst}".format(
                 color=Fore.RED, msg=oe, rst=Style.RESET_ALL))
+            
+    def file_path(self, input_path, root_dir):
+        # Convert the input to a Path object to handle OS-specific path separators
+        root_dir = Path(root_dir)
+
+        # Normalize package-style notation (e.g., employee.schema.server) to path-style
+        if "." in input_path and not "/" in input_path and not "\\" in input_path:
+            normalized_path = Path(input_path.replace(".", "/"))
+        else:
+            normalized_path = Path(input_path)
+
+        # Handle wildcards if present
+        if "*" in str(normalized_path):
+            # Use glob to handle the wildcard pattern
+            matched_files = list(root_dir.glob(str(normalized_path)))
+        else:
+            # Treat it as a direct path or package path without wildcards
+            full_path = root_dir / normalized_path
+            if full_path.exists():
+                matched_files = [full_path]
+            else:
+                matched_files = []
+
+        # Print matched files or return the first match
+        if matched_files:
+            return matched_files
+        else:
+            return []
 
     def deploy(self, env, opt):
-
+        if not self.build_oaf:
+            return
+        
         _login = get_login(env['name'])
 
         host = env["host"]
@@ -268,7 +287,7 @@ class OAF(LoggingHandler):
             ]
 
             cmd = ";\n".join(cmd).format(**env)
-            print(cmd)
+            # print(cmd)
 
             stdin, stdout, stderr = con.exec_command(cmd)
             print(stdout.read().decode())
@@ -305,13 +324,14 @@ class OAF(LoggingHandler):
             if self.include and not any([x.is_relative_to(_path) for _path in self.include]):
                 continue
             if self.exclude and any([x.is_relative_to(_path) for _path in self.exclude]):
-                # print(_path)
                 continue
 
             tree = etree.parse(x.open())
             root = tree.getroot()
             if not ('ui' in root.nsmap.keys()):
                 continue
+            
+            self.log.info(f'adding : {x}')
             files.append(x.relative_to(self.jdev_home).as_posix())
 
         files = ["\t'{}'".format(file) for file in files]
@@ -345,13 +365,16 @@ class OAF(LoggingHandler):
         _fs = dict(folder=list(), file=list())
         _items = list()
 
-        # with ZipFile(self.archive, 'w', ZIP_DEFLATED) as zf:
         for item in self.workspace.rglob("*"):
+            
+            if self.include and not any([item.match(_path) or item.is_relative_to(_path) for _path in self.include]):
+                continue
 
-            if self.include and not any([item.is_relative_to(_path) for _path in self.include]):
+            if self.exclude and any([item.match(_path) or item.is_relative_to(_path) for _path in self.include]):
                 continue
-            if self.exclude and any([item.is_relative_to(_path) for _path in self.exclude]):
-                continue
+
+            self.log.info(f'Adding : {item}')
+
             if item.is_file():
                 _fs['folder'].append(
                     item.parent.relative_to(self.jdev_home).as_posix())
@@ -374,7 +397,7 @@ class OAF(LoggingHandler):
                     for _item in _items:
                         zf.write(_item['o'], _item['p'])
             elif 'tar' in self.archive_type.split('.'):
-                with tarfile.open(self.archive, 'w:gz') as zf:
+                with tarfile.open(self.archive, 'w:gz', format=tarfile.GNU_FORMAT) as zf:
                     for _item in _items:
                         zf.add(_item['o'], arcname=_item['p'])
         return _fs
