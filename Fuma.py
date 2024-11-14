@@ -117,6 +117,7 @@ class OAF(LoggingHandler):
     archive = None
     exclude = []
     include = []
+    deployment_mode = 'full'
 
     def __init__(self, config, template, lock, log_level):
         # with lock:
@@ -144,11 +145,11 @@ class OAF(LoggingHandler):
             _env = detail.get("environment", {}).get(_key)
 
             if not (detail.get('oaf') and _setup.get("deployment", {}).get("oaf")):
-                build_oaf = detail.get('oaf') != None
-                if not build_oaf:
+                self.build_oaf = detail.get('oaf') != None
+                if not self.build_oaf:
                     return
                 
-            build_oaf = True
+            self.build_oaf = True
             self.package = detail['oaf']['package'].format(**detail['oaf'])
             _wd = self.package.split('.')
             self.workspace = self.jdev_home.joinpath(*_wd)
@@ -190,7 +191,7 @@ class OAF(LoggingHandler):
                 'archive_type': 'tar' if 'tar' in self.archive_type.split('.')  else self.archive_type 
             }
 
-            self.log.info(f"environment : {_key}, ({_env})")
+            # self.log.info(f"environment : {_key}, ({_env})")
             self.shell_file(token)
             self.build(_setup, _env)
 
@@ -220,7 +221,7 @@ class OAF(LoggingHandler):
 
         # Handle wildcards if present
         if "*" in str(normalized_path):
-            # Use glob to handle the wildcard pattern
+            # Use glob to handle the wildcard patternbuild_oaf
             matched_files = list(root_dir.glob(str(normalized_path)))
         else:
             # Treat it as a direct path or package path without wildcards
@@ -277,17 +278,17 @@ class OAF(LoggingHandler):
 
             cmd = [
                 ". {file} run",
-                "cd {home}",
+                f"cd {os_home}",
                 "http_proxy='http://localhost'",
                 "pass='{pass}'",
                 "export pass",
                 "affirm='Y'",
                 "export affirm",
-                f"{self.shell_type} {env['script']} full {env['bounce']}"
+                f"{self.shell_type} {env['script']} {self.deployment_mode} {env['bounce']}"
             ]
 
             cmd = ";\n".join(cmd).format(**env)
-            # print(cmd)
+            self.log.info(cmd)
 
             stdin, stdout, stderr = con.exec_command(cmd)
             print(stdout.read().decode())
@@ -365,6 +366,8 @@ class OAF(LoggingHandler):
         _fs = dict(folder=list(), file=list())
         _items = list()
 
+        self.deployment_mode = 'partial' if self.exclude  or self.include else 'full'
+
         for item in self.workspace.rglob("*"):
             
             if self.include and not any([item.match(_path) or item.is_relative_to(_path) for _path in self.include]):
@@ -392,6 +395,9 @@ class OAF(LoggingHandler):
         _fs['file'] = '\n'.join(["\t'{0}'".format(i) for i in list(dict.fromkeys(_fs['file']))])
 
         if _items:
+            self.log.info(f"{self.archive_type=}")
+            self.log.info(f"{self.archive=}")
+
             if self.archive_type == 'zip':
                 with ZipFile(self.archive, 'w', ZIP_DEFLATED) as zf:
                     for _item in _items:
