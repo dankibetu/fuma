@@ -88,6 +88,6 @@ for /f "tokens=1" %%p in ('type "%fuma_dir%\_others\requirements.txt"') do (
 
 @REM color 
 echo.
-echo Fuma is now installed in your system
+echo Fuma setup complete.
 pause
 exit /b
