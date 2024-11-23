@@ -126,8 +126,7 @@ class OAF(LoggingHandler):
             assert config
             assert template
             self.template = template
-            assert self.jdev_home.exists() and self.jdev_home.is_dir()
-            assert self.template.exists() and self.template.is_file()
+
 
             if not isinstance(config, (dict, OrderedDict)):
                 path = Path(config)
@@ -148,6 +147,9 @@ class OAF(LoggingHandler):
                 self.build_oaf = detail.get('oaf') != None
                 if not self.build_oaf:
                     return
+            
+            assert self.jdev_home.exists() and self.jdev_home.is_dir()
+            assert self.template.exists() and self.template.is_file()
                 
             self.build_oaf = True
             self.package = detail['oaf']['package'].format(**detail['oaf'])
