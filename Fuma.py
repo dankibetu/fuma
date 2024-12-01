@@ -28,7 +28,7 @@ import socket
 current_date = datetime.now()
 setup_file = Path
 application_name = 'FUMA'
-application_version = 2.3
+application_version = '2.4.121'
 __shell_type__ = 'bash'
 __archive_type__ = 'tar.gz'
 
@@ -182,6 +182,7 @@ class OAF(LoggingHandler):
             _structure = self.zip_project()
 
             token = {
+                'version' : str(application_version),
                 'project': Path(*(self.package.split('.')[:-1])).as_posix(),
                 'solution': self.package.split('.')[-1],
                 'timestamp': datetime.strftime(datetime.now(), "%d-%m-%Y %H:%M:%S"),
@@ -537,7 +538,7 @@ class AOL(LoggingHandler):
 
     def shell_file(self, commands):
         token = {'timestamp': datetime.strftime(
-            datetime.now(), "%d-%m-%Y %H:%M:%S")}
+            datetime.now(), "%d-%m-%Y %H:%M:%S"), 'version': str(application_version)} 
         # if self.out_file.exists():
         self.out_file.unlink(missing_ok=True)
         dependency = {}
@@ -1235,7 +1236,7 @@ class SQL(LoggingHandler):
                 self.db_template['table']['create'].format(**tokens))
         # print(self.ddl_sql, self.dml_sql)
 
-        token = {"timestamp": '{:%d-%m-%Y %H:%M:%S}'.format(datetime.now())}
+        token = {"timestamp": '{:%d-%m-%Y %H:%M:%S}'.format(datetime.now()), "version" : str(application_version)}
         for key, value in file_tokens.items():
             _key = key.replace(" ", "_")
             token[_key] = ''
