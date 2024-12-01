@@ -1,3 +1,8 @@
-export rdffile="SAF_PAYSLIP_ANALYSIS.rdf";
-$ORACLE_HOME/bin/rwconverter apps/swara321 stype=rdffile source=$XXSFC_TOP/reports/US/$rdffile dtype=xmlfile dest=$HOME/dkibetu/rdf2xdo/$rdffile.xml batch=yes overwrite=yes;
-java  oracle.apps.xdo.rdfparser.BIPBatchConversion .xml -source $HOME/dkibetu/rwconverter/2022-r -target $HOME/dkibetu/rwconverter/2022-r -debug
+export xmldest="${HOME}/NextTechnologies/dkibetu/rdf2xdo";
+export rdffile="NCWSC_PAYSLIP_RPT.rdf";
+mkdir -p $xmldest/rwconverter;
+mkdir -p $xmldest/xdo;
+cd $xmldest;
+cp $PAY_TOP/reports/US/$rdffile .;
+$ORACLE_HOME/bin/rwconverter APPS/welcome1 stype=rdffile source=./$rdffile dtype=xmlfile dest="rwconverter/$rdffile.xml" batch=yes overwrite=yes;
+java  oracle.apps.xdo.rdfparser.BIPBatchConversion .xml -source ./rwconverter -target ./xdo -debug

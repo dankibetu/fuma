@@ -22,6 +22,33 @@ Yellow='\033[0;33m';       # Yellow
 
 #| -- ---------------------------------------------------- --- |
 
+app_art(){
+cat<<APP_ART    
+
+FFFFFFFFFFFFFFFFFFFFFF                                                            
+F::::::::::::::::::::F                                                            
+F::::::::::::::::::::F                                                            
+FF::::::FFFFFFFFF::::F                                                            
+  F:::::F       FFFFFFuuuuuu    uuuuuu     mmmmmmm    mmmmmmm     aaaaaaaaaaaaa   
+  F:::::F             u::::u    u::::u   mm:::::::m  m:::::::mm   a::::::::::::a  
+  F::::::FFFFFFFFFF   u::::u    u::::u  m::::::::::mm::::::::::m  aaaaaaaaa:::::a 
+  F:::::::::::::::F   u::::u    u::::u  m::::::::::::::::::::::m           a::::a 
+  F:::::::::::::::F   u::::u    u::::u  m:::::mmm::::::mmm:::::m    aaaaaaa:::::a 
+  F::::::FFFFFFFFFF   u::::u    u::::u  m::::m   m::::m   m::::m  aa::::::::::::a 
+  F:::::F             u::::u    u::::u  m::::m   m::::m   m::::m a::::aaaa::::::a 
+  F:::::F             u:::::uuuu:::::u  m::::m   m::::m   m::::ma::::a    a:::::a 
+FF:::::::FF           u:::::::::::::::uum::::m   m::::m   m::::ma::::a    a:::::a 
+F::::::::FF            u:::::::::::::::um::::m   m::::m   m::::ma:::::aaaa::::::a 
+F::::::::FF             uu::::::::uu:::um::::m   m::::m   m::::m a::::::::::aa:::a
+FFFFFFFFFFF               uuuuuuuu  uuuummmmmm   mmmmmm   mmmmmm  aaaaaaaaaa  aaaa         
+
+Oracle E-Business Suite R12 Migration Tool
+Daniel Kibetu <danielkibetu@gmail.com>
+version 2.4.121
+
+APP_ART
+}
+app_art;
 
 usage () {
     cat <<HELP_USAGE
@@ -166,9 +193,9 @@ if [ -z "${instance}" ];
     printf "\n";
     exit 1;
   else
+    environment=$instance;
     printf "%b" "${Green}Connection Established : [${environment}] ${NC}";
     printf "\n";
-    environment=$instance;
 fi
 
 if [ -z "${AD_APPS_JDBC_URL}" ]; then
