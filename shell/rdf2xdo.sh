@@ -1,5 +1,5 @@
 export xmldest="${HOME}/NextTechnologies/dkibetu/rdf2xdo";
-export rdffile="NCWSC_PAYSLIP_RPT.rdf";
+export rdffile="NCWSC_Net_Pay_Bank_File_Generator.rdf";
 mkdir -p $xmldest/rwconverter;
 mkdir -p $xmldest/xdo;
 cd $xmldest;
