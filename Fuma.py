@@ -741,123 +741,267 @@ class AOL(LoggingHandler):
             print("Deployment Cancelled. Unable to establish connection.", de)
 
     def deploy(self, env, deps):
-
-        _login = get_login(env['name'])
-
-        host = env["host"]
-
-        os_user = _login['OS']['username']
-        db_user = _login['DB']['username']
-        os_pwd = _login['OS']['password']
-        db_pwd = _login['DB']['password']
-
-        home = Path(env["home"].format(**globals())).joinpath("aol")
-        ldt_dir = home.joinpath("ldt")
-        ldt = self.file_name
-        home = home.as_posix()
-        _zip_name = f"{ldt}.{self.archive_type}"
-        ldt_zip = ldt_dir.parent.joinpath(_zip_name).as_posix()
-
-        self.log.info(f"generating archive : {ldt_zip}")
-
-        if self.remote_download and not os_pwd:
-            raise AssertionError(
-                "OS login details for '{host}' could not be loaded.".format(**env))
-        if self.remote_download and not db_pwd:
-            raise AssertionError(
-                f"Database login details for '{db_user}@{env['name']}' could not be loaded.")
-
-        cmd = f"mkdir -p {home};"
-
-        d = dict(env=env["host"], path=self.out_dir.absolute(),
-                 color=Fore.CYAN, reset=Style.RESET_ALL)
-        print("{color}Attempting to download AOL from {env}{reset}".format(**d))
-
+        """Deploys files to a remote server and handles dependencies."""
         try:
+            # Fetch login credentials
+            _login = get_login(env['name'])
+            host = env["host"]
+            os_user = _login['OS']['username']
+            db_user = _login['DB']['username']
+            os_pwd = _login['OS']['password']
+            db_pwd = _login['DB']['password']
+
+            # Construct paths
+            home = Path(env["home"].format(**globals())).joinpath("aol")
+            ldt_dir = home.joinpath("ldt")
+            ldt = self.file_name
+            home = home.as_posix()
+            _zip_name = f"{ldt}.{self.archive_type}"
+            ldt_zip = ldt_dir.parent.joinpath(_zip_name).as_posix()
+
+            self.log.info(f"Generating archive: {ldt_zip}")
+
+            # Validate credentials
             if self.remote_download:
-                con = SSHClient()
-                con.set_missing_host_key_policy(AutoAddPolicy())
-                con.connect(host, username=os_user, password=os_pwd, timeout=60)
-                con.exec_command(cmd)
+                if not os_pwd:
+                    raise ValueError(f"OS login details for '{host}' could not be loaded.")
+                if not db_pwd:
+                    raise ValueError(f"Database login details for '{db_user}@{env['name']}' could not be loaded.")
 
-                with SCPClient(con.get_transport()) as scp:
-                    scp.put(self.export_script, home)
-                    scp.put(self.out_file, home)
+            cmd_init = f"mkdir -p {home}"
 
-                cmd = [
-                    f". {env['file']} run",
-                    f"cd {home}",
-                    "http_proxy='http://localhost'",
-                    f"export pass='{db_pwd}'",
-                    f"export out_dir='{ldt}'",
-                    f"rm -rf {_zip_name}",
-                    # f"sed -i 's/\\r$//' {self.out_file.name}",
-                    # f'tr -d "\\r" < {self.out_file.name} > {self.out_file.name}',
-                    f"{self.shell_type} {self.out_file.name}",
-                    f"cd {ldt}",
-                    archive_command(self.archive_type, 'c', Path(f'../{ldt}').as_posix(), '.'),
-                    "cd ..",
-                    # "wait",
-                    f"du -sh {_zip_name}",
-                    f"rm -rf {ldt}",
-                    f"rm -rf {home}/*.sh"
-                ]
+            # Log and display attempt message
+            d = dict(env=env["host"], path=self.out_dir.absolute(), color=Fore.CYAN, reset=Style.RESET_ALL)
+            print(f"{Fore.CYAN}Attempting to download AOL from {host}{Style.RESET_ALL}")
 
-                cmd = ";\n".join(cmd).format(script=self.out_file.name, file=env['file'])
-                self.log.info(cmd)
+            if self.remote_download:
+                with SSHClient() as con:
+                    con.set_missing_host_key_policy(AutoAddPolicy())
+                    con.connect(host, username=os_user, password=os_pwd, timeout=60)
 
-                stdin, stdout, stderr = con.exec_command(cmd)
-                print(stdout.read().decode())
-                # self.log.info(stderr.read().decode())
-                _target = self.out_dir.joinpath(_zip_name).absolute().__str__()
-                self.log.info(f"FTP :: {ldt_zip} --> {_target}")
+                    # Execute initialization command
+                    self.log.info(f"Executing: {cmd_init}")
+                    _, stdout, stderr = con.exec_command(cmd_init)
+                    self.log.info(stdout.read().decode().strip())
+                    # print(stdout.read().decode().strip())
+                    error_msg = stderr.read().decode().strip()
+                    if error_msg:
+                        self.log.error(error_msg)
 
-                for retry in range(self.max_download_reries):
-                    ssh_spinner.start()
-                    retry_delay = 10
-                    try:
-                        with SCPClient(con.get_transport(), progress=ssh_progress, socket_timeout=300) as scp:
-                            scp.get(ldt_zip, _target)
-                            ssh_spinner.succeed(f"Download Successful. File saved as {_target}")
-                            break
-                    except (SCPException, socket.timeout) as e:
-                        # print(f"Error: {e}. Retrying in {retry_delay} seconds...")
-                        if retry == self.max_download_reries:
-                            ssh_spinner.fail(f"Download failed after {self.max_download_reries} attempts.")
-                        else:
-                            ssh_spinner.warn(
-                                f"Error occurred : {shex}. Retrying in {retry_delay} seconds... {retry + 1} of {self.max_download_reries} attempts")
-                            time.sleep(retry_delay)
-                    except Exception as shex:
-                        ssh_spinner.fail(f"Download failed")
-                       
-                    ssh_spinner.stop_and_persist()
+                    # Upload required files
+                    with SCPClient(con.get_transport()) as scp:
+                        scp.put(self.export_script, home)
+                        scp.put(self.out_file, home)
 
-                if self.cleanup:
-                    # print(f"Deleting outfile : {self.out_file}")
-                    self.out_file.unlink(missing_ok=True)
-                else:
-                    print(f"AOL outfile : {self.out_file}")
+                    # Construct deployment commands
+                    cmd_deploy = [
+                        f". {env['file']} run",
+                        f"cd {home}",
+                        "http_proxy='http://localhost'",
+                        f"export pass='{db_pwd}'",
+                        f"export out_dir='{ldt}'",
+                        f"rm -rf {_zip_name}",
+                        f"{self.shell_type} {self.out_file.name}",
+                        f"cd {ldt}",
+                        archive_command(self.archive_type, 'c', Path(f'../{ldt}').as_posix(), '.'),
+                        "cd ..",
+                        f"du -sh {_zip_name}",
+                        f"rm -rf {ldt}",
+                        f"rm -rf {home}/*.sh"
+                    ]
+                    cmd_deploy = ";\n".join(filter(None, cmd_deploy))  # Remove empty commands
+                    self.log.info(f"Executing Deployment: {cmd_deploy}")
 
-                con.close()
+                    _, stdout, stderr = con.exec_command(cmd_deploy)
+                    output = stdout.read().decode().strip()
+                    error_output = stderr.read().decode().strip()
+                    if output:
+                        self.log.info(output)
+                        print(output)
+                    if error_output:
+                        self.log.error(error_output)
+                        print(error_output)
 
-                print("{color}AOL Resources path : {path}{reset}".format(**d))
+                    # Attempt file download with retries
+                    _target = self.out_dir.joinpath(_zip_name).absolute().__str__()
+                    self.log.info(f"FTP: {ldt_zip} --> {_target}")
 
+                    for retry in range(self.max_download_reries):
+                        try:
+                            with SCPClient(con.get_transport(), progress=ssh_progress, socket_timeout=300) as scp:
+                                scp.get(ldt_zip, _target)
+                                ssh_spinner.succeed(f"Download Successful. File saved as {_target}")
+                                break
+                        except (SCPException, socket.timeout) as e:
+                            retry_delay = 10
+                            if retry == self.max_download_reries - 1:
+                                ssh_spinner.fail(f"Download failed after {self.max_download_reries} attempts.")
+                                self.log.error(f"Download failed: {e}")
+                            else:
+                                ssh_spinner.warn(f"Error: {e}. Retrying in {retry_delay} seconds... ({retry + 1}/{self.max_download_reries})")
+                                time.sleep(retry_delay)
+                        except Exception as shex:
+                            ssh_spinner.fail("Download failed")
+                            self.log.error(f"Unexpected error during download: {shex}")
+                            break  # Exit retry loop on unexpected error
+
+                        ssh_spinner.stop_and_persist()
+
+                    # Cleanup if enabled
+                    if self.cleanup:
+                        self.out_file.unlink(missing_ok=True)
+                    else:
+                        print(f"AOL outfile: {self.out_file}")
+
+                    print(f"{Fore.CYAN}AOL Resources path: {self.out_dir.absolute()}{Style.RESET_ALL}")
+
+            # Process dependencies
             for obj in deps:
-                for file in obj:
-                    # print(file, obj[file])
-                    _description = obj[file].get('description', 'Depencies')
-                    _description = f'Configuring {_description}'
-                    print(f"{Fore.CYAN}{_description} ...{Style.RESET_ALL}")
+                for file, meta in obj.items():
+                    _description = meta.get('description', 'Dependencies')
+                    print(f"{Fore.CYAN}Configuring {_description}...{Style.RESET_ALL}")
                     _f = self.shell_directory.joinpath(file)
                     if _f.exists():
-                        for t in obj[file].get('target', []):
-                            _t = self.out_dir.absolute().joinpath(t)
-                            shutil.copy(_f.__str__(), _t.__str__())
+                        for target in meta.get('target', []):
+                            _t = self.out_dir.absolute().joinpath(target)
+                            shutil.copy(str(_f), str(_t))
+
             return ldt_zip
 
+        except ValueError as ve:
+            self.log.error(f"Validation Error: {ve}")
+            print(f"{Fore.RED}Validation Error: {ve}{Style.RESET_ALL}")
+
+        except SCPException as scpe:
+            self.log.error(f"SCP Transfer Error: {scpe}")
+            print(f"{Fore.RED}SCP Transfer Error: {scpe}{Style.RESET_ALL}")
+
+        except socket.timeout:
+            self.log.error("Connection Timeout: Unable to reach remote host.")
+            print(f"{Fore.RED}Connection Timeout: Unable to reach remote host.{Style.RESET_ALL}")
+
         except Exception as de:
-            print("Deployment Cancelled. Unable to establish connection.", de)
+            self.log.error(f"Deployment Failed: {de}")
+            print(f"{Fore.RED}Deployment Cancelled. {de}{Style.RESET_ALL}")
+    
+    # def deploy(self, env, deps):
+
+    #     _login = get_login(env['name'])
+
+    #     host = env["host"]
+
+    #     os_user = _login['OS']['username']
+    #     db_user = _login['DB']['username']
+    #     os_pwd = _login['OS']['password']
+    #     db_pwd = _login['DB']['password']
+
+    #     home = Path(env["home"].format(**globals())).joinpath("aol")
+    #     ldt_dir = home.joinpath("ldt")
+    #     ldt = self.file_name
+    #     home = home.as_posix()
+    #     _zip_name = f"{ldt}.{self.archive_type}"
+    #     ldt_zip = ldt_dir.parent.joinpath(_zip_name).as_posix()
+
+    #     self.log.info(f"generating archive : {ldt_zip}")
+
+    #     if self.remote_download and not os_pwd:
+    #         raise AssertionError(
+    #             "OS login details for '{host}' could not be loaded.".format(**env))
+    #     if self.remote_download and not db_pwd:
+    #         raise AssertionError(
+    #             f"Database login details for '{db_user}@{env['name']}' could not be loaded.")
+
+    #     cmd = f"mkdir -p {home};"
+
+    #     d = dict(env=env["host"], path=self.out_dir.absolute(),
+    #              color=Fore.CYAN, reset=Style.RESET_ALL)
+    #     print("{color}Attempting to download AOL from {env}{reset}".format(**d))
+
+    #     try:
+    #         if self.remote_download:
+    #             con = SSHClient()
+    #             con.set_missing_host_key_policy(AutoAddPolicy())
+    #             con.connect(host, username=os_user, password=os_pwd, timeout=60)
+    #             con.exec_command(cmd)
+
+    #             with SCPClient(con.get_transport()) as scp:
+    #                 scp.put(self.export_script, home)
+    #                 scp.put(self.out_file, home)
+
+    #             cmd = [
+    #                 f". {env['file']} run",
+    #                 f"cd {home}",
+    #                 "http_proxy='http://localhost'",
+    #                 f"export pass='{db_pwd}'",
+    #                 f"export out_dir='{ldt}'",
+    #                 f"rm -rf {_zip_name}",
+    #                 # f"sed -i 's/\\r$//' {self.out_file.name}",
+    #                 # f'tr -d "\\r" < {self.out_file.name} > {self.out_file.name}',
+    #                 f"{self.shell_type} {self.out_file.name}",
+    #                 f"cd {ldt}",
+    #                 archive_command(self.archive_type, 'c', Path(f'../{ldt}').as_posix(), '.'),
+    #                 "cd ..",
+    #                 # "wait",
+    #                 f"du -sh {_zip_name}",
+    #                 f"rm -rf {ldt}",
+    #                 f"rm -rf {home}/*.sh"
+    #             ]
+
+    #             cmd = ";\n".join(cmd).format(script=self.out_file.name, file=env['file'])
+    #             self.log.info(cmd)
+
+    #             stdin, stdout, stderr = con.exec_command(cmd)
+    #             print(stdout.read().decode())
+    #             # self.log.info(stderr.read().decode())
+    #             _target = self.out_dir.joinpath(_zip_name).absolute().__str__()
+    #             self.log.info(f"FTP :: {ldt_zip} --> {_target}")
+
+    #             for retry in range(self.max_download_reries):
+    #                 ssh_spinner.start()
+    #                 retry_delay = 10
+    #                 try:
+    #                     with SCPClient(con.get_transport(), progress=ssh_progress, socket_timeout=300) as scp:
+    #                         scp.get(ldt_zip, _target)
+    #                         ssh_spinner.succeed(f"Download Successful. File saved as {_target}")
+    #                         break
+    #                 except (SCPException, socket.timeout) as e:
+    #                     # print(f"Error: {e}. Retrying in {retry_delay} seconds...")
+    #                     if retry == self.max_download_reries:
+    #                         ssh_spinner.fail(f"Download failed after {self.max_download_reries} attempts.")
+    #                     else:
+    #                         ssh_spinner.warn(
+    #                             f"Error occurred : {shex}. Retrying in {retry_delay} seconds... {retry + 1} of {self.max_download_reries} attempts")
+    #                         time.sleep(retry_delay)
+    #                 except Exception as shex:
+    #                     ssh_spinner.fail(f"Download failed")
+                       
+    #                 ssh_spinner.stop_and_persist()
+
+    #             if self.cleanup:
+    #                 # print(f"Deleting outfile : {self.out_file}")
+    #                 self.out_file.unlink(missing_ok=True)
+    #             else:
+    #                 print(f"AOL outfile : {self.out_file}")
+
+    #             con.close()
+
+    #             print("{color}AOL Resources path : {path}{reset}".format(**d))
+
+    #         for obj in deps:
+    #             for file in obj:
+    #                 # print(file, obj[file])
+    #                 _description = obj[file].get('description', 'Depencies')
+    #                 _description = f'Configuring {_description}'
+    #                 print(f"{Fore.CYAN}{_description} ...{Style.RESET_ALL}")
+    #                 _f = self.shell_directory.joinpath(file)
+    #                 if _f.exists():
+    #                     for t in obj[file].get('target', []):
+    #                         _t = self.out_dir.absolute().joinpath(t)
+    #                         shutil.copy(_f.__str__(), _t.__str__())
+    #         return ldt_zip
+
+    #     except Exception as de:
+    #         print("Deployment Cancelled. Unable to establish connection.", de)
 
 
 class SQL(LoggingHandler):
