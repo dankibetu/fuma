@@ -499,7 +499,7 @@ database:
     set define off; 
     set serveroutput on;
 
-    {table}{primary_key}{index}{foreign_key}{sequence}
+    {table}{primary_key}{index}{foreign_key}{sequence}{synonym}
 
     show errors;
   table:
@@ -607,7 +607,9 @@ database:
       {parent_columns}
         ){delete_action};
 
-    synonym:
-      create: |+
-        create public synonym {name}
-          for {table};
+  synonym:
+    create: |+
+      create public synonym {name}
+        for {table};
+    drop: |+
+      drop public synonym {name};
