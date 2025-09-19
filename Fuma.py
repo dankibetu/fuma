@@ -917,18 +917,22 @@ class AOL(LoggingHandler):
         except ValueError as ve:
             self.log.error(f"Validation Error: {ve}")
             print(f"{Fore.RED}Validation Error: {ve}{Style.RESET_ALL}")
+            raise
 
         except SCPException as scpe:
             self.log.error(f"SCP Transfer Error: {scpe}")
             print(f"{Fore.RED}SCP Transfer Error: {scpe}{Style.RESET_ALL}")
+            raise
 
         except socket.timeout:
             self.log.error("Connection Timeout: Unable to reach remote host.")
             print(f"{Fore.RED}Connection Timeout: Unable to reach remote host.{Style.RESET_ALL}")
+            raise
 
         except Exception as de:
             self.log.error(f"Deployment Failed: {de}")
             print(f"{Fore.RED}Deployment Cancelled. {de}{Style.RESET_ALL}")
+            raise
     
     # def deploy(self, env, deps):
 
@@ -1178,8 +1182,8 @@ class SQL(LoggingHandler):
             else:
                 extra_columns[_col] = extra_column[_col]
 
-        _include = set([i.lower() for i in build.get('include', [])])
-        _exclude = set([i.lower() for i in build.get('exclude', [])])
+        _include = set([i.lower() for i in build.get('include', [])]).union(set([i.lower() for i in setup.get('include', [])]))
+        _exclude = set([i.lower() for i in build.get('exclude', [])]).union(set([i.lower() for i in setup.get('exclude', [])]))
         _exclude.difference_update(_include)
 
         if _include:
