@@ -517,8 +517,7 @@ class AOL(LoggingHandler):
         self.out_dir.mkdir(parents=True, exist_ok=True)
         detail.setdefault("schema", "01")
         detail.setdefault("prefix", "02")
-        self.out_file = self.out_dir.joinpath(
-            "aol.{schema}.{prefix}.sh".format(**detail))
+        self.out_file = self.out_dir.joinpath(f"aol.{detail['prefix']}.{path.stem}.sh")
         self.log.debug(f"AOL Output directory   : {self.out_dir}")
         self.log.debug(f"SQL Output directory   : {self.sql_out_dir}")
         self.log.debug(f"Temporary shell script : {self.out_file}")
@@ -530,16 +529,67 @@ class AOL(LoggingHandler):
         self.log.debug(f"Commands :\n{cmd}")
         # print(cmd)
         # return
-        deps = self.shell_file(cmd)
-        if env and self.out_file.exists():
+        deps, online = self.shell_file(cmd, env)
+        self.build_depencies(deps)
+        if env and online:
             _zip_path = self.deploy(env, deps)
             self.log.info(f"zip path : {_zip_path}; Target : {_target}")
             self.remote_deploy(_target, Path(_zip_path).name)
 
-    def shell_file(self, commands):
+    def build_depencies(self, deps):
+        for obj in deps:
+            for file, meta in obj.items():
+                _description = meta.get('description', 'Dependencies')
+                print(f"{Fore.CYAN}Configuring {_description}...{Style.RESET_ALL}")
+                _f = self.shell_directory.joinpath(file)
+                if _f.exists():
+                    for target in meta.get('target', []):
+                        _t = self.out_dir.absolute().joinpath(target)
+                        shutil.copy(str(_f), str(_t))
+
+    def shell_file(self, commands, env):
         token = {'timestamp': datetime.strftime(
             datetime.now(), "%d-%m-%Y %H:%M:%S"), 'version': str(application_version)} 
+        online = env.get("online", True) == True
+        pre_cmd = []
+        post_cmd = []
         # if self.out_file.exists():
+        if not online:
+            _login = get_login(env['name'])
+            shell_escape = lambda s: "''" if s == "" else "'" + s.replace("'", "'\"'\"'") + "'"
+            db_pwd = (_login['DB']['password'])
+
+            home = Path(env["home"].format(**globals())).joinpath("aol")
+            script =  Path(env["scripts"].format(**globals())).joinpath(self.export_script.name).as_posix()
+            ldt_dir = home.joinpath("ldt")
+            ldt = self.file_name
+            home = home.as_posix()
+            _zip_name = f"{ldt}.{self.archive_type}"
+            ldt_zip = ldt_dir.parent.joinpath(_zip_name).as_posix()
+            wd = ldt_dir.joinpath(ldt).as_posix()
+            
+            pre_cmd = [
+                        f"\nexport pass='{db_pwd}'",
+                        f"export out_dir='{wd}'",
+                        f"mkdir -p $out_dir",
+                        f"\nsource {env['file']} run",
+                        f"cd {home}",
+                        f"rm -rf {_zip_name}",
+                        f"cp {script} $out_dir",
+                        f"# {self.shell_type} {self.out_file.name}",
+                        f"cd $out_dir",
+                        "# #", 
+
+                    ]
+            post_cmd = [
+                        archive_command(self.archive_type, 'c', Path(f'../{ldt}').as_posix(), '.'),
+                        "cd ..",
+                        f"du -sh {_zip_name}",
+                        f"rm -rf {ldt}",
+                         "# #",
+
+                    ]
+
         self.out_file.unlink(missing_ok=True)
         dependency = {}
         if not commands:
@@ -554,10 +604,14 @@ class AOL(LoggingHandler):
                     print(de)
 
                 wh.write("\n".join(shell['license']).format(**token))
+                wh.write(";\n".join(pre_cmd))
+                wh.write("\n\n\n");
                 for seq, block in enumerate(shell['aol']):
                     wh.write(block)
                 wh.write(commands)
-        return dependency.get("aol", {})
+                wh.write("\n\n\n");
+                wh.write(";\n".join(post_cmd))
+        return dependency.get("aol", {}), online
         # d = dict(path=self.out_dir.absolute(), color=Fore.GREEN, reset=Style.RESET_ALL)
         # print("{color}AOL Resources path : {path}{reset}".format(**d))
 
@@ -621,7 +675,7 @@ class AOL(LoggingHandler):
                                 _vl = _value[_key].get('flexfield')
                                 if not _vl:
                                     continue
-                                d['extra'] = '{0} -c "{1}"'.format(
+                                d['extra'] = '{0} -e "{1}"'.format(
                                     d['extra'], _vl)
                                 if _value[_key].get('application'):
                                     d['a'] = _value[_key].get('application')
@@ -742,6 +796,7 @@ class AOL(LoggingHandler):
 
     def deploy(self, env, deps):
         """Deploys files to a remote server and handles dependencies."""
+
         try:
             # Fetch login credentials
             _login = get_login(env['name'])
@@ -856,15 +911,6 @@ class AOL(LoggingHandler):
                     print(f"{Fore.CYAN}AOL Resources path: {self.out_dir.absolute()}{Style.RESET_ALL}")
 
             # Process dependencies
-            for obj in deps:
-                for file, meta in obj.items():
-                    _description = meta.get('description', 'Dependencies')
-                    print(f"{Fore.CYAN}Configuring {_description}...{Style.RESET_ALL}")
-                    _f = self.shell_directory.joinpath(file)
-                    if _f.exists():
-                        for target in meta.get('target', []):
-                            _t = self.out_dir.absolute().joinpath(target)
-                            shutil.copy(str(_f), str(_t))
 
             return ldt_zip
 
@@ -1100,7 +1146,8 @@ class SQL(LoggingHandler):
             'table': [],
             'primary key': [],
             'foreign key': [],
-            'index': []
+            'index': [],
+            'synonym': []
         }
 
         for _col in extra_column:
@@ -1234,6 +1281,18 @@ class SQL(LoggingHandler):
                         file_tokens[ct].append(
                             self.db_template[ct]['create'].format(**_ct))
 
+            _syn = objects[table].get('synonym', None)
+            if _syn:
+                _sd = {"table": "{0}.{1}_{2}".format(schema, prefix, table)}
+                if isinstance(_syn, str):
+                    _sd['name'] = _syn
+                elif isinstance(_syn, bool):
+                    _sd['name'] = f"{prefix}_{table}"
+
+                file_tokens['synonym'].append(self.db_template['synonym']['drop'].format(**_sd))
+                file_tokens['synonym'].append(self.db_template['synonym']['create'].format(**_sd))
+
+    
             _seq = objects[table].get('sequence', None)
             if _seq:
                 _sl = []
