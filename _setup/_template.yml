@@ -1,0 +1,615 @@
+shell:
+  dependency:
+    import:
+      aol:
+        - fnd_import.sh:
+            description: Scripts required to import AOL files
+            target:
+              - .
+        # relative path from the shell directory
+
+  license:
+    - |+
+      #!/usr/bin/env bash
+
+      #| -----------------------------------------------------------| 
+      #| -- OAF Project Deployment Script                           |
+      #| -- Author    : Daniel Kibetu <danielkibetu@gmail.com>      |
+      #| -- Version   : {version:<43s}                                |
+      #| -- Generated : {timestamp:<43s} |
+      #| ---------------------------------------------------------- |
+
+      app_art(){{
+      cat<<APP_ART    
+
+      FFFFFFFFFFFFFFFFFFFFFF                                                            
+      F::::::::::::::::::::F                                                            
+      F::::::::::::::::::::F                                                            
+      FF::::::FFFFFFFFF::::F                                                            
+        F:::::F       FFFFFFuuuuuu    uuuuuu     mmmmmmm    mmmmmmm     aaaaaaaaaaaaa   
+        F:::::F             u::::u    u::::u   mm:::::::m  m:::::::mm   a::::::::::::a  
+        F::::::FFFFFFFFFF   u::::u    u::::u  m::::::::::mm::::::::::m  aaaaaaaaa:::::a 
+        F:::::::::::::::F   u::::u    u::::u  m::::::::::::::::::::::m           a::::a 
+        F:::::::::::::::F   u::::u    u::::u  m:::::mmm::::::mmm:::::m    aaaaaaa:::::a 
+        F::::::FFFFFFFFFF   u::::u    u::::u  m::::m   m::::m   m::::m  aa::::::::::::a 
+        F:::::F             u::::u    u::::u  m::::m   m::::m   m::::m a::::aaaa::::::a 
+        F:::::F             u:::::uuuu:::::u  m::::m   m::::m   m::::ma::::a    a:::::a 
+      FF:::::::FF           u:::::::::::::::uum::::m   m::::m   m::::ma::::a    a:::::a 
+      F::::::::FF            u:::::::::::::::um::::m   m::::m   m::::ma:::::aaaa::::::a 
+      F::::::::FF             uu::::::::uu:::um::::m   m::::m   m::::m a::::::::::aa:::a
+      FFFFFFFFFFF               uuuuuuuu  uuuummmmmm   mmmmmm   mmmmmm  aaaaaaaaaa  aaaa         
+
+      Oracle E-Business Suite R12 Migration Tool
+      Daniel Kibetu <danielkibetu@gmail.com>
+      version {version}
+
+      APP_ART
+      }}
+      app_art;
+
+  aol:
+    - |+
+
+      username="apps";
+
+    - |+
+      # -------------------[ Console colours ] -----------------------
+
+      Red='\033[0;31m';          # Red
+      Green='\033[0;32m';        # Green
+      NC='\033[0m';              # No color
+      Blue='\033[0;36m';         # Blue
+      Yellow='\033[0;33m';       # Yellow
+
+
+      if [ -z "$out_dir" ]; then
+          ldt_dir=$(pwd);
+      else
+          case $out_dir in
+              /*) ldt_dir="${out_dir}" ;;
+              *)  ldt_dir=$(pwd)"/${out_dir}";;
+          esac
+      fi
+
+      # ldt_dir="${ldt_dir}/ldt";
+      logpath="${ldt_dir}/log";
+
+      mkdir -p "${logpath}";
+      chmod -R 755 "${ldt_dir}";
+
+    - |+
+
+      # check if password is set
+
+      if [ -z "${pass}" ]; then
+          printf "%b" "${Green}Enter Database Password for user '${username}' : ${NC}";
+          read -s pass;
+          printf "\n";
+
+          if [ -z "${pass}" ]; then
+            printf "%b \n" "${Red}You did not enter password. Exiting ...${NC}";
+            printf "\n";
+            printf "\n";
+            exit 1;
+          fi
+      fi
+
+      # check if password is valid
+      instance=$(sqlplus -S ${username}/${pass} << EOF | grep INSTANCE | sed 's/INSTANCE//;s/[ ]//g'
+        set head off
+        set feedback off
+        set pagesize 5000
+        set linesize 30000
+        SELECT 'INSTANCE', applications_system_name FROM fnd_product_groups; 
+        exit
+      EOF
+      );
+
+      if [ -z "${instance}" ];
+        then 
+          printf "%b" "${Red}Could not establish database connection. Check your login details. \nExiting... ${NC}";
+          printf "\n";
+          exit 1;
+        else
+          environment=$instance;
+          printf "%b" "${Green}Connection Established : [${environment}] ${NC}";
+          printf "\n";
+      fi
+
+    - |+
+
+      if [ -z "${AD_APPS_JDBC_URL}" ]; then
+
+        # check the TNS Entry
+        printf "%b" "${Green}Resolving connection using net entry name '${instance}'${NC}\n";
+
+        lsearch='(\(DESC.+\))\s+(OK.+)';
+        lres=$(tnsping $instance 2>&1);
+        [[ "$lres" =~ $lsearch ]];
+
+        tns_entry=${BASH_REMATCH[1]};
+        status=${BASH_REMATCH[2]};
+
+        tns_entry=$(echo -e "${tns_entry}" | tr -d '[:space:]');
+
+        if [[ $lres != *OK* ]]; then
+            printf "%b" "${Red}${lres}\nExiting... ${NC}";
+            printf "\n";
+            exit 1;
+        fi
+
+      else
+        tns_entry="${AD_APPS_JDBC_URL}";
+      fi
+
+      if [ -z "${APPL_TOP}" ]; then
+        printf "%b \n" "${Red}Please execute ${environment} Environment Variable. Exiting...${NC}";
+        printf "\n";
+        exit 1;
+      fi
+
+    - |+
+
+      export tns_entry;
+      export environment;
+
+      export ldt_dir;
+      export logpath;
+
+      export username;
+
+      export Red;
+      export Green;
+      export NC;
+      export Blue;
+      export Yellow;
+
+  oaf:
+    - |+
+      xml_imports=(
+      {files}
+      );  
+
+      structure_dirs=(
+      {struct_folders}
+      );
+
+      structure_files=(
+      {struct_files}
+      );
+
+      style="{deploy_style}";
+
+      archive_file="{archive_file}";
+      archive_type="{archive_type}";
+      solution="{solution}";
+      project="{project}";
+
+      ftop="${{JAVA_TOP}}/${{project}}";
+
+    - |+
+
+      usage () {
+        cat <<USAGE
+        $0  [<full|partial>] | <bounce>
+
+        full    - deploy OAF solution and register XML on MDS
+        partial - deploy OAF solution, XML files are not registered on MDS
+        bounce  - bounce appache server
+        
+      USAGE
+      exit 0
+      }
+
+      Red='\033[0;31m';          # Red
+      Green='\033[0;32m';        # Green
+      NC='\033[0m';              # No color
+      Blue='\033[0;34m';         # Blue
+      Yellow='\033[0;33m';       # Yellow
+
+      for var in "$@"; do
+        if  [[ "${var}" =~ ^(full)|(partial)$ ]]; then
+          if [ -z "${deployment_mode}" ]; then
+            deployment_mode="${var}";
+          else
+              printf "%b \n" "${Red}Invalid invoke.${NC}";
+              usage;
+              exit 1;
+          fi
+        elif [[ "${var}" =~ ^(bounce)$ ]]; then
+            if [ -z "${bounce_server}" ]; then
+            bounce_server="${var}";
+          else
+              printf "%b \n" "${Red}Invalid invoke.${NC}";
+              usage;
+              exit 1;
+          fi
+        else
+          printf "%b \n" "${Red}Invalid invoke.${NC}";
+          usage;
+          exit 1;
+        fi
+      done
+
+      if [ -z "${deployment_mode}" ] && [ -z "${bounce_server}" ]; then
+        printf "%b \n" "${Red}Invalid invoke...${NC}";
+        usage;
+        exit 1;
+      fi
+
+    - |+
+
+      environment=$(whoami);
+      username="apps";
+
+    - |+
+
+      # check if password is set
+
+      if [ -z "${pass}" ]; then
+          printf "%b" "${Green}Enter APPS password: ${NC}";
+          read -s pass;
+          printf "\n";
+
+          if [ -z "${pass}" ]; then
+            printf "%b \n" "${Red}You did not enter password. Exiting ...${NC}";
+            printf "\n";
+            printf "\n";
+            exit 1;
+          fi
+      fi
+
+      # check if password is valid
+      instance=$(sqlplus -S "${username}"/"${pass}" << EOF | grep INSTANCE | sed 's/INSTANCE//;s/[ ]//g'
+          set head off
+          set feedback off
+          set pagesize 5000
+          set linesize 30000
+          SELECT 'INSTANCE', applications_system_name FROM fnd_product_groups;
+          exit
+      EOF
+      );
+
+      if [ -z "${instance}" ];
+        then 
+          printf "%b" "${Red}Could not establish database connection. Check your login details. \nExiting... ${NC}";
+          printf "\n";
+          exit 1;
+        else
+          environment=$instance;
+          printf "%b" "${Green}Connection Established : [${environment}] ${NC}";
+          printf "\n";
+      fi
+
+      # check if environment is captured
+
+      if [ -z "${environment}" ]; then
+        printf "%b \n" "${Red}Unknown Environment, exiting ...${NC}";
+        exit 1;
+      fi
+
+      if [ -z "${AD_APPS_JDBC_URL}" ]; then
+
+        printf "%b" "${Green}Resolving connection using net entry name '${instance}'${NC}\n";
+
+        lsearch='(\(DESC.+\))\s+(OK.+)';
+        lres=$(tnsping $instance 2>&1);
+        [[ "$lres" =~ $lsearch ]];
+
+        tns_entry=${BASH_REMATCH[1]};
+        status=${BASH_REMATCH[2]};
+
+        tns_entry=$(echo -e "${tns_entry}" | tr -d '[:space:]');
+
+        if [[ $lres != *OK* ]]; then
+            printf "%b" "${Red}${lres}\nExiting... ${NC}";
+            printf "\n";
+            exit 1;
+        fi
+      else
+        tns_entry="${AD_APPS_JDBC_URL}";
+      fi
+
+      if [ -z "${JAVA_TOP}" ]; then
+        printf "%b \n" "${Red}Please set ${environment} Environment Variables. \n\tExiting...${NC}";
+        printf "\n";
+        exit 1;
+      fi
+    - |+
+
+      # Check if deployment mode is set
+
+      if [ -n "${deployment_mode}" ]; then
+
+        if [ ! -e "$ftop" ]; then
+          mkdir $ftop;
+          chmod 777 $ftop;
+        fi
+
+        if [ ! -f "${archive_file}" ]; then
+          printf "%b \n" "${Red}Archive '${archive_file}' does not exist. Exiting ${NC}";
+          exit 1;
+        fi
+
+        if [ -z "${affirm}" ]; then
+          printf "%b" "${Yellow} \nEverything checks out, Do you want to proceed with the Deployment? [Y/N] :  ${NC}";
+          read affirm;
+        fi
+
+        if [[ "${affirm,,}" != "y" ]] ;then
+            printf "%b \n" "${Red}Deployment Cancelled. Exiting ...${NC}";
+            printf "\n";
+            printf "\n";
+            exit 1;
+        fi
+
+
+        printf "%b \n" "[${Blue}Mode : ${style}${NC}] Deploying ${solution}...${Green} ";
+
+        if [ "${style}" == "full" ]; then
+        
+
+          if [ -d "$ftop/$solution" ]; then
+              # Generate a timestamp in the format YYYYMMDD_HHMMSS
+              timestamp=$(date +"%Y%m%d_%H%M%S")
+
+              # Create a timestamped archive file name
+              archive_name="${timestamp}_${archive_file}"
+
+              # Create a tar.gz archive of the solution directory
+              tar czf "$ftop/$archive_name" -C "$ftop" "$solution"
+
+              echo "backup created: $ftop/$archive_name"
+          fi
+
+          rm -f $ftop/${archive_file};
+          rm -rf $ftop/${solution};
+
+          cp -v -f ${archive_file} $ftop;
+
+          if [[ "${archive_type,,}" == "zip" ]] ;then
+            unzip -q -o $ftop/${archive_file} -d $ftop;
+          else
+            tar xf $ftop/${archive_file} -C $ftop;
+          fi
+
+          rm -f $ftop/${archive_file};
+
+        else 
+          working_dir=$(pwd)"/${style}";
+          mkdir -p "${working_dir}";
+          
+          if [[ "${archive_type,,}" == "zip" ]] ;then
+            unzip -q -o ./"${archive_file}" -d $working_dir;
+          else
+            cd "${working_dir}";
+            tar xf "../${archive_file}";
+          fi
+          
+          for pdir in "${structure_dirs[@]}"; do 
+            mkdir -p "${JAVA_TOP}/${pdir}";
+          done
+          
+          for pfile in "${structure_files[@]}"; do 
+            src="${working_dir}"${pfile##$project};
+            dst="${JAVA_TOP}/${pfile}"
+            
+          # Check if the destination file exists
+            if [ -e "$dst" ]; then
+                # Generate a timestamp in the format YYYYMMDD_HHMMSS
+                timestamp=$(date +"%Y%m%d_%H%M%S")
+                
+                # Create a backup of the destination file with a timestamp
+                backup_dst="${dst}.${timestamp}.bak"
+                cp -f "${dst}" "${backup_dst}"
+                
+                echo "[Backup created]: ${backup_dst}"
+            fi  
+
+            mv -f "${src}" "${dst}";
+            echo "[+] ${pfile}";
+          done
+          
+          # rm -rf "${working_dir}";
+        fi
+        
+        printf "%b \n" "${NC}Complete";
+      fi
+
+      if [[ ( "${#xml_imports[@]}" -gt 0 ) ]]; then
+
+          printf "%b \n" "${Green}Registering XML files to MDS...${NC}";
+
+        for xml_file in "${xml_imports[@]}"; do
+          if [ -f "${JAVA_TOP}/${xml_file}" ]; then
+              printf "Importing file : ${xml_file}";
+              res=$(java oracle.jrad.tools.xml.importer.XMLImporter "${JAVA_TOP}/${xml_file}" -username "${username}" -password "${pass}" -dbconnection "${tns_entry}" -rootdir $JAVA_TOP 2>&1);
+              
+              if [[ "${res}" == *"Import completed"* ]]; then
+                printf "%b" "${Green} [Done] ${NC} \n";
+              else
+                printf "%b" "${Red}${res}${NC}  \n";
+                exit 1;
+              fi
+
+              # rm -f "${JAVA_TOP}/${xml_file}";
+
+            else
+              printf "%b \n" "${Red}FILE MISSING : ${JAVA_TOP}/${xml_file}${NC}";
+          fi
+        done
+      fi
+
+    - |+
+
+      if [ "${bounce_server}" == "bounce" ]; then
+
+        printf "%b \n" "${Green}Bouncing Apache Server...${NC}";
+
+        res=$(sh $INST_TOP/admin/scripts/adoacorectl.sh stop 2>&1);
+
+        if [[ "${res}" == *"status 0"* ]]; then
+          printf "%b \n" "${Green}${environment} : stopped ${NC}\n";
+        else
+          printf "%b \n" "${Red}Could not stop ${environment} services\n\n${res}${NC}\n";
+        fi
+
+        sres=$(sh $INST_TOP/admin/scripts/adoacorectl.sh start 2>&1);
+          
+        if [[ "${sres}" == *"status 0"* ]]; then
+          printf "%b \n" "${Green}${environment} : started ${NC}";
+        else
+          printf "%b \n" "${Red}Could not start ${environment} services\n\n${sres}${NC}\n";
+        fi 
+
+      fi
+
+      # -------------------- [ Automated deployment complete ] -------------------------------------
+database:
+  ddl_script: |+
+    --| -----------------------------------------------------------|--
+    --| -- Database Definition Language Script                     |--
+    --| -- Author    : Daniel Kibetu <danielkibetu@gmail.com>      |--
+    --| -- Version   : 2.0.8.20231202                              |--
+    --| -- Generated : {timestamp:<43s} |--
+    --| ---------------------------------------------------------- |--
+
+    /*
+    FFFFFFFFFFFFFFFFFFFFFF                                                            
+    F::::::::::::::::::::F                                                            
+    F::::::::::::::::::::F                                                            
+    FF::::::FFFFFFFFF::::F                                                            
+      F:::::F       FFFFFFuuuuuu    uuuuuu     mmmmmmm    mmmmmmm     aaaaaaaaaaaaa   
+      F:::::F             u::::u    u::::u   mm:::::::m  m:::::::mm   a::::::::::::a  
+      F::::::FFFFFFFFFF   u::::u    u::::u  m::::::::::mm::::::::::m  aaaaaaaaa:::::a 
+      F:::::::::::::::F   u::::u    u::::u  m::::::::::::::::::::::m           a::::a 
+      F:::::::::::::::F   u::::u    u::::u  m:::::mmm::::::mmm:::::m    aaaaaaa:::::a 
+      F::::::FFFFFFFFFF   u::::u    u::::u  m::::m   m::::m   m::::m  aa::::::::::::a 
+      F:::::F             u::::u    u::::u  m::::m   m::::m   m::::m a::::aaaa::::::a 
+      F:::::F             u:::::uuuu:::::u  m::::m   m::::m   m::::ma::::a    a:::::a 
+    FF:::::::FF           u:::::::::::::::uum::::m   m::::m   m::::ma::::a    a:::::a 
+    F::::::::FF            u:::::::::::::::um::::m   m::::m   m::::ma:::::aaaa::::::a 
+    F::::::::FF             uu::::::::uu:::um::::m   m::::m   m::::m a::::::::::aa:::a
+    FFFFFFFFFFF               uuuuuuuu  uuuummmmmm   mmmmmm   mmmmmm  aaaaaaaaaa  aaaa         
+
+    Oracle E-Business Suite R12 Migration Tool
+    Daniel Kibetu <danielkibetu@gmail.com>
+    */
+
+    set define off; 
+    set serveroutput on;
+
+    {table}{primary_key}{index}{foreign_key}{sequence}{synonym}
+
+    show errors;
+  table:
+    drop: |+
+      alter table {name}
+        drop primary key cascade;
+
+      drop table {name};
+
+    create: |+
+      /*
+      {comments}
+      */
+
+      create table {name} (
+      {columns}
+      );
+
+    insert: |+
+      /*
+      {comments}
+      */
+      insert into {name} (
+        {columns}
+      )
+      values (
+        {values}
+      );
+
+    update: |+
+      update {name} set
+        {key_value}
+       where 1 = 1
+        {where_clause}
+      ;
+
+    truncate: |+
+      truncate table {name};
+
+  sequence:
+    drop: |+
+      drop sequence {name};
+    default:
+      start: 1
+      increment: 1
+    create: |+
+      create sequence {name}
+        start with {start}
+        increment by {increment};
+
+  directory:
+    drop: |+
+      drop directory {name};
+    create: |+
+      create directory {name}
+        as '{path}';
+    update: |+
+      create or replace directory {name}
+        as '{path}';
+
+  index:
+    drop: |+
+      drop index {name};
+    create: |+
+      create index {name}
+        on {table}
+        columns
+        (
+      {columns}
+        );
+
+  unique index:
+    drop: |+
+      drop index {name};
+    create: |+
+      create unique index {name}
+        on {table}
+        columns
+        (
+      {columns}
+        );
+
+  primary key:
+    create: |+
+      alter table {table}
+        add constraint {name}
+        primary key  
+        ( 
+      {columns} 
+        );
+
+  foreign key:
+    drop: |+
+      alter table {table}
+        drop constraint {name};
+
+    create: |+
+      alter table {table}
+        add constraint {name}
+        foreign key 
+        (
+      {child_columns}
+        ) references {parent_table}
+        (
+      {parent_columns}
+        ){delete_action};
+
+  synonym:
+    create: |+
+      create public synonym {name}
+        for {table};
+    drop: |+
+      drop public synonym {name};
