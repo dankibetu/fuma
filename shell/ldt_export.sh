@@ -256,7 +256,10 @@ res=$(sqlplus -s ${username}/${pass}@${tns_entry} << EOF
 set feedback off
 set heading off
 set termout off
-set linesize 1000
+set linesize 32767
+set pagesize 0
+set long 1000000
+set longchunksize 1000000
 set trimspool on
 set verify off
 
@@ -270,20 +273,9 @@ exec :l_object      := '$3';
 
 spool $1
 prompt SET DEFINE OFF
-SELECT
-    decode( type || '-' || to_char(line, 'fm9999999999999'), 
-           'PACKAGE BODY-1',  '/' || CHR(10) || 'SHOW ERRORS' || CHR(10), NULL
-        ) 
-    || decode(line, 1, 'CREATE OR REPLACE ', '')
-    || text text
-FROM
-    dba_source
-WHERE
-        name =:l_object
-    AND owner = :l_owner
-ORDER BY
-    type,
-    line;
+SELECT dbms_metadata.get_ddl('PACKAGE_SPEC', :l_object, :l_owner) FROM dual;
+prompt /
+SELECT dbms_metadata.get_ddl('PACKAGE_BODY', :l_object, :l_owner) FROM dual;
 prompt /
 prompt SHOW ERRORS
 prompt SET DEFINE ON
