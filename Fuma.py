@@ -28,7 +28,7 @@ import socket
 current_date = datetime.now()
 setup_file = Path
 application_name = 'FUMA'
-application_version = '2.4.121'
+application_version = '2.4.127'
 __shell_type__ = 'bash'
 __archive_type__ = 'tar.gz'
 
@@ -1287,7 +1287,7 @@ class SQL(LoggingHandler):
 
             _syn = objects[table].get('synonym', None)
             if _syn:
-                _sd = {"table": "{0}.{1}_{2}".format(schema, prefix, table)}
+                _sd = {"object": "{0}.{1}_{2}".format(schema, prefix, table)}
                 if isinstance(_syn, str):
                     _sd['name'] = _syn
                 elif isinstance(_syn, bool):
@@ -1304,14 +1304,27 @@ class SQL(LoggingHandler):
 
                 if isinstance(_seq, list):
                     for _sn in _seq:
-                        _v = dict(name="{0}.{1}_{2}".format(
-                            schema, prefix, _sn))
-                        _v.update(_sd)
-                        _sl.append(_v)
+                        if isinstance(_sn, str):
+                            _v = dict(name="{0}.{1}_{2}".format( schema, prefix, _sn))
+                            _v.update(_sd)
+                            _sl.append(_v)
+                        elif isinstance(_sn, dict) :
+                            # print(_sn)
+                            (sik,siv), = _sn.items()
+                            _v = dict(name="{0}.{1}_{2}".format( schema, prefix, sik))
+                            _v.update(_sd)
+                            _sl.append(_v)
+                            if siv.get('synonym'):
+                                _sd1 = {"object": _v['name'], "name": f"{prefix}_{sik}"}
+                                file_tokens['synonym'].append(self.db_template['synonym']['drop'].format(**_sd1))
+                                file_tokens['synonym'].append(self.db_template['synonym']['create'].format(**_sd1))
+
+
                 elif isinstance(_seq, str):
                     _v = dict(name="{0}.{1}_{2}".format(schema, prefix, _seq))
                     _v.update(_sd)
                     _sl.append(_v)
+
 
                 for sd in _sl:
                     _n = sd['name'][len(schema) + 1:]

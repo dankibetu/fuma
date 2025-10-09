@@ -382,6 +382,8 @@ for f in `ls $ldt_path | grep "^[0-9]" | grep -v ".log$" | sort -n`; do
 			  result=$(FNDLOAD apps/"${pass}" 0 Y UPLOAD $FND_TOP/patch/115/import/afsload.lct  "${file}" - WARNING=YES UPLOAD_MODE=REPLACE CUSTOM_MODE=FORCE 2>&1);
 		elif [[ $f == *MSG_*  ]]; then
 			  result=$(FNDLOAD apps/"${pass}" 0 Y UPLOAD $FND_TOP/patch/115/import/afmdmsg.lct  "${file}" - WARNING=YES UPLOAD_MODE=REPLACE CUSTOM_MODE=FORCE 2>&1);
+		elif [[ $f == *01_FRM_PERZ_*  ]]; then
+			  result=$(FNDLOAD apps/"${pass}" 0 Y UPLOAD $FND_TOP/patch/115/import/affrmcus.lct  "${file}" 2>&1);
 		elif [[ $f == 04_AME_RULE*  ]]; then
 			  result=$(FNDLOAD apps/$pass 0 Y UPLOAD $AME_TOP/patch/115/import/amesrulk.lct "${file}" - WARNING=YES UPLOAD_MODE=REPLACE CUSTOM_MODE=FORCE 2>&1);
     elif [[ $f == 01_WF_*  ]]; then
