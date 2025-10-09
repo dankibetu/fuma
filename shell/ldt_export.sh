@@ -273,9 +273,9 @@ exec :l_object      := '$3';
 
 spool $1
 prompt SET DEFINE OFF
-SELECT dbms_metadata.get_ddl('PACKAGE_SPEC', :l_object, :l_owner) FROM dual;
+SELECT dbms_metadata.get_ddl('PACKAGE_SPEC', :l_object, :l_owner, '11.2.0') FROM dual;
 prompt /
-SELECT dbms_metadata.get_ddl('PACKAGE_BODY', :l_object, :l_owner) FROM dual;
+SELECT dbms_metadata.get_ddl('PACKAGE_BODY', :l_object, :l_owner, '11.2.0') FROM dual;
 prompt /
 prompt SHOW ERRORS
 prompt SET DEFINE ON
@@ -284,6 +284,42 @@ set feedback on
 set heading on
 set termout on
 set linesize 100
+EXIT;
+EOF
+ >/dev/null );
+}
+
+function export_db_object(){
+
+res=$(sqlplus -s ${username}/${pass}@${tns_entry} << EOF
+
+set feedback off
+set heading off
+set termout off
+set linesize 32767
+set pagesize 0
+set long 1000000
+set longchunksize 1000000
+set trimspool on
+set verify off
+
+variable l_owner        varchar2(10)
+variable l_object       varchar2(30)
+variable l_file_name    varchar2(100)
+variable l_object_type  varchar2(30)
+
+exec :l_file_name   := '$1';
+exec :l_owner       := '$2';
+exec :l_object      := '$3';
+exec :l_object_type := '$4';
+
+spool $1
+prompt SET DEFINE OFF
+SELECT dbms_metadata.get_ddl(:l_object_type, :l_object, :l_owner, '11.2.0') FROM dual;
+prompt /
+prompt SHOW ERRORS
+prompt SET DEFINE ON
+spool off
 EXIT;
 EOF
  >/dev/null );
@@ -541,6 +577,14 @@ for paol in "${aols[@]}"; do
                 out_file="${ldt_dir}/02_VSET_${tout}";
                 result=$(FNDLOAD apps/$pass 0 Y DOWNLOAD $FND_TOP/patch/115/import/afffload.lct "${out_file}.ldt" VALUE_SET FLEX_VALUE_SET_NAME="${object}" 2>&1);
                 parseResult "${result}" "${out_file}"; 
+                deploymentLDT  "${out_file}";
+            ;;
+
+            FORM_PERSONALIZATION)
+                tout=$(echo "${object// /_}" | tr '[:lower:]' '[:upper:]');
+                out_file="${ldt_dir}/01_FRM_PERZ_${tout}";
+                result=$(FNDLOAD apps/$pass 0 Y DOWNLOAD $FND_TOP/patch/115/import/affrmcus.lct "${out_file}.ldt" FND_FORM_CUSTOM_RULES FORM_NAME="${object}%" 2>&1);
+                parseResult "${result}" "${object}"; 
                 deploymentLDT  "${out_file}";
             ;;
 

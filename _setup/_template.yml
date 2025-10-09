@@ -610,6 +610,6 @@ database:
   synonym:
     create: |+
       create public synonym {name}
-        for {table};
+        for {object};
     drop: |+
       drop public synonym {name};
