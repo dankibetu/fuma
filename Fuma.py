@@ -100,7 +100,8 @@ class LoggingHandler:
 
 
 class OAF(LoggingHandler):
-    jdev_home = Path(os.environ["JDEV_USER_HOME"]).joinpath("myclasses")
+    # jdev_home = Path(os.environ["JDEV_USER_HOME"]).joinpath("myclasses")
+    # jdev_project = jdev_home.parent.joinpath("myprojects")
     token_regexp = re.compile(
         r"(?<={{)([\w.:<>]+)(?=}})", re.IGNORECASE | re.MULTILINE)
     template = None
@@ -148,14 +149,27 @@ class OAF(LoggingHandler):
                 if not self.build_oaf:
                     return
             
+            self.full_backup = False
+            self.build_oaf = True
+            self.package = detail['oaf']['package'].format(**detail['oaf'])
+            preference = detail['oaf'].get('preference', {})
+            self.jdev_home = Path(os.environ["JDEV_USER_HOME"]).joinpath(preference.get("compiled", "myclasses"))
+            self.jdev_project = self.jdev_home.parent.joinpath(preference.get("source", "myprojects"))
+            backup_option = preference.get("backup", "full").lower()
+        
+            
             assert self.jdev_home.exists() and self.jdev_home.is_dir()
             assert self.template.exists() and self.template.is_file()
                 
-            self.build_oaf = True
-            self.package = detail['oaf']['package'].format(**detail['oaf'])
             _wd = self.package.split('.')
-            self.workspace = self.jdev_home.joinpath(*_wd)
-            # print(self.workspace )
+            self.devspace = self.jdev_project.joinpath(*_wd)
+
+            if backup_option == 'source':
+                self.jdev_home = self.jdev_project
+                self.workspace = self.jdev_home.joinpath(*_wd)
+            else: 
+                self.workspace = self.jdev_home.joinpath(*_wd)
+                self.full_backup = (backup_option == 'full')
 
             for _path in detail['oaf'].get('include', []):
                 self.include.extend(self.file_path(_path,self.workspace))
@@ -342,6 +356,7 @@ class OAF(LoggingHandler):
         return "\n".join(files)
 
     def zip_project(self):
+        compiled_source_map = {'.class': '.java'}
         if self.archive.exists():
             stats = {}
             for _seq, _archive in enumerate(self.archive.parent.glob(self.archive.stem + '*' + self.archive.suffix)):
@@ -382,15 +397,20 @@ class OAF(LoggingHandler):
             self.log.info(f'Adding : {item}')
 
             if item.is_file():
-                _fs['folder'].append(
-                    item.parent.relative_to(self.jdev_home).as_posix())
-                _fs['file'].append(item.relative_to(
-                    self.jdev_home).as_posix())
-            else:
-                _fs['folder'].append(
-                    item.parent.relative_to(self.jdev_home).as_posix())
+                _fs['folder'].append(item.parent.relative_to(self.jdev_home).as_posix())
+                _fs['file'].append(item.relative_to(self.jdev_home).as_posix())
+                
+                _items.append(dict(o=item, p=item.relative_to(self.workspace.parent)))
 
-            _items.append(dict(o=item, p=item.relative_to(self.workspace.parent)))
+                if self.full_backup and item.suffix.lower() in compiled_source_map:
+                    original_source = self.jdev_project / item.relative_to(self.jdev_home).with_suffix(compiled_source_map[item.suffix.lower()])
+                    if original_source.exists():
+                        _fs['file'].append(original_source.relative_to(self.jdev_project).as_posix())
+                        _items.append(dict(o=original_source, p=original_source.relative_to(self.devspace.parent)))              
+            else:
+                _fs['folder'].append(item.parent.relative_to(self.jdev_home).as_posix())
+
+            # _items.append(dict(o=item, p=item.relative_to(self.workspace.parent)))
 
             # zf.write(item, item.relative_to(self.workspace.parent))
 
@@ -1196,13 +1216,14 @@ class SQL(LoggingHandler):
                 # self.log.debug(f"Exluding table {table} from build")
                 continue
 
-            timestamp = '{:%d-%m-%Y %H:%M:%S}'.format(datetime.now())
+            # timestamp = '{:%d-%m-%Y %H:%M:%S}'.format(datetime.now())
+            timestamp = '{:%d-%m-%Y %H:%M:%S %Z%z}'.format(datetime.now().astimezone())
             tokens = {
                 'schema': schema,
                 'prefix': prefix,
                 'table': table,
                 'name': "{0}_{1}".format(prefix, table),
-                'comments': objects[table].get('description', 'Generated at {}'.format(timestamp)).strip()
+                'comments': (objects[table].get('description') or  objects[table].get('comment') or 'Generated at {}'.format(timestamp)).strip()
             }
 
             # print(table)
