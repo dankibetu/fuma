@@ -219,7 +219,7 @@ function parseResult(){
         return 1
     fi
 
-    echo -e "${Green}[COMPLETE] Log: $log${NC}"
+    echo -e "${Green}[COMPLETE] Log: ${dst##*/} ${NC}"
 }
 
 # function parseResult(){
@@ -626,7 +626,7 @@ for paol in "${aols[@]}"; do
                 tout=$(echo "${object// /_}" | tr '[:lower:]' '[:upper:]');
                 out_file="${ldt_dir}/01_FRM_PERZ_${tout}";
                 result=$(FNDLOAD apps/$pass 0 Y DOWNLOAD $FND_TOP/patch/115/import/affrmcus.lct "${out_file}.ldt" FND_FORM_CUSTOM_RULES FORM_NAME="${object}%" 2>&1);
-                parseResult "${result}" "${object}"; 
+                parseResult "${result}" "${out_file}"; 
                 deploymentLDT  "${out_file}";
             ;;
 
@@ -634,7 +634,7 @@ for paol in "${aols[@]}"; do
                 tout=$(echo "${object// /_}" | tr '[:lower:]' '[:upper:]');
                 out_file="${ldt_dir}/01_MSG_${tout}";
                 result=$(FNDLOAD apps/$pass 0 Y DOWNLOAD $FND_TOP/patch/115/import/afmdmsg.lct "${out_file}.ldt" FND_NEW_MESSAGES APPLICATION_SHORT_NAME="${app}" MESSAGE_NAME="${object}%" 2>&1);
-                parseResult "${result}" "${object}"; 
+                parseResult "${result}" "${out_file}"; 
                 deploymentLDT  "${out_file}";
             ;;
 
