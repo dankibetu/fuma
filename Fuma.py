@@ -590,7 +590,7 @@ class AOL(LoggingHandler):
             
             pre_cmd = [
                         f"\nexport pass='{db_pwd}'",
-                        f"export out_dir='{wd}'",
+                        f"export out_dir={wd}",
                         f"mkdir -p $out_dir",
                         f"\nsource {env['file']} run",
                         f"cd {home}",
@@ -875,7 +875,7 @@ class AOL(LoggingHandler):
                         "http_proxy='http://localhost'",
                         f"export pass='{db_pwd}'",
                         f"export out_dir='{ldt}'",
-                        f"rm -rf {_zip_name}",
+                        f"rm -f {_zip_name}",
                         f"{self.shell_type} {self.out_file.name}",
                         f"cd {ldt}",
                         archive_command(self.archive_type, 'c', Path(f'../{ldt}').as_posix(), '.'),

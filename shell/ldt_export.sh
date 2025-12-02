@@ -189,17 +189,59 @@ fi
 }
 
 function parseResult(){
-	pSearch='(L[0-9]+.log)';
-	[[ "${1}" =~ $pSearch ]];
-	log=${BASH_REMATCH[1]};
+    local text="$1"
+    local pfile=$(basename "$2")
 
-	src=$(pwd)"/${log}";
-  pfile=$(basename "${2}");
-  dst="${logpath}/${pfile}.E.log";
+    # Extract log filename
+    local log=$(echo "$text" | awk -F': ' '/Log filename/ {print $2}' | xargs)
 
-	mv ${src} ${dst};
-	echo -e "${Green}[COMPLETE] : log file : ${pfile}${NC}";
+    # Extract report filename (not used in mv yet, but available)
+    local rpt=$(echo "$text" | awk -F': ' '/Report filename/ {print $2}' | xargs)
+
+    # Validate extracted log filename
+    if [[ -z "$log" ]]; then
+        echo -e "${Red}[ERROR] : Could not extract log filename from input. Received: '$text'${NC}"
+        return 1
+    fi
+
+    local src="$(pwd)/$log"
+    local dst="${logpath}/${pfile}.E.log"
+
+    # Check file exists
+    if [[ ! -f "$src" ]]; then
+        echo -e "${Red}[ERROR] : Log file not found: $src${NC}"
+        return 1
+    fi
+
+    mv "$src" "$dst"
+    if [[ $? -ne 0 ]]; then
+        echo -e "${Red}[ERROR] : Failed to move $src to $dst${NC}"
+        return 1
+    fi
+
+    echo -e "${Green}[COMPLETE] Log: $log${NC}"
 }
+
+# function parseResult(){
+#     echo "${1}";
+# 	pSearch='(L[0-9]+.log)';
+#     pfile=$(basename "${2}");
+
+#     if [[ ! -f "${1}" ]]; then 
+#         echo -e "${Red}[ERROR] : Process '${pfile}' did not generate logs. Please check Application ${NC}"; 
+#         return;
+#     fi
+
+# 	[[ "${1}" =~ $pSearch ]];
+# 	log=${BASH_REMATCH[1]};
+
+# 	src=$(pwd)"/${log}";
+
+#     dst="${logpath}/${pfile}.E.log";
+
+# 	mv ${src} ${dst};
+# 	echo -e "${Green}[COMPLETE] : log file : ${pfile}${NC}";
+# }
 
 function export_oaf_customization(){
     res=$(java oracle.jrad.tools.xml.exporter.XMLExporter "$1" -username "${username}" -password "${pass}" -dbconnection "${tns_entry}" -rootdir "$2" 2>&1);
