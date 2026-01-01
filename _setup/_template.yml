@@ -15,7 +15,7 @@ shell:
       #| -----------------------------------------------------------| 
       #| -- OAF Project Deployment Script                           |
       #| -- Author    : Daniel Kibetu <danielkibetu@gmail.com>      |
-      #| -- Version   : {version:<43s}                                |
+      #| -- Version   : {version:<43s} |
       #| -- Generated : {timestamp:<43s} |
       #| ---------------------------------------------------------- |
 
@@ -365,7 +365,7 @@ shell:
           rm -f $ftop/${archive_file};
           rm -rf $ftop/${solution};
 
-          cp -v -f ${archive_file} $ftop;
+          cp -f ${archive_file} $ftop;
 
           if [[ "${archive_type,,}" == "zip" ]] ;then
             unzip -q -o $ftop/${archive_file} -d $ftop;
@@ -470,7 +470,7 @@ database:
     --| -----------------------------------------------------------|--
     --| -- Database Definition Language Script                     |--
     --| -- Author    : Daniel Kibetu <danielkibetu@gmail.com>      |--
-    --| -- Version   : 2.0.8.20231202                              |--
+    --| -- Version   : {version:<43s} |--
     --| -- Generated : {timestamp:<43s} |--
     --| ---------------------------------------------------------- |--
 
