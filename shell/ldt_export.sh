@@ -222,27 +222,6 @@ function parseResult(){
     echo -e "${Green}[COMPLETE] Log: ${dst##*/} ${NC}"
 }
 
-# function parseResult(){
-#     echo "${1}";
-# 	pSearch='(L[0-9]+.log)';
-#     pfile=$(basename "${2}");
-
-#     if [[ ! -f "${1}" ]]; then 
-#         echo -e "${Red}[ERROR] : Process '${pfile}' did not generate logs. Please check Application ${NC}"; 
-#         return;
-#     fi
-
-# 	[[ "${1}" =~ $pSearch ]];
-# 	log=${BASH_REMATCH[1]};
-
-# 	src=$(pwd)"/${log}";
-
-#     dst="${logpath}/${pfile}.E.log";
-
-# 	mv ${src} ${dst};
-# 	echo -e "${Green}[COMPLETE] : log file : ${pfile}${NC}";
-# }
-
 function export_oaf_customization(){
     res=$(java oracle.jrad.tools.xml.exporter.XMLExporter "$1" -username "${username}" -password "${pass}" -dbconnection "${tns_entry}" -rootdir "$2" 2>&1);
     if [[ "${res}" == *"Export completed"* ]]; then
@@ -291,81 +270,123 @@ function deploymentLDT(){
     ldt_file="${1}.ldt";
 }
 
-function export_plsql(){
-
-res=$(sqlplus -s ${username}/${pass}@${tns_entry} << EOF
-
-set feedback off
-set heading off
-set termout off
-set linesize 32767
-set pagesize 0
-set long 1000000
-set longchunksize 1000000
-set trimspool on
-set verify off
-
-variable l_owner        varchar2(10)
-variable l_object       varchar2(30)
-variable l_file_name    varchar2(100)
-
-exec :l_file_name   := '$1';
-exec :l_owner       := '$2';
-exec :l_object      := '$3';
-
-spool $1
-prompt SET DEFINE OFF
-SELECT dbms_metadata.get_ddl('PACKAGE_SPEC', :l_object, :l_owner, '11.2.0') FROM dual;
-prompt /
-SELECT dbms_metadata.get_ddl('PACKAGE_BODY', :l_object, :l_owner, '11.2.0') FROM dual;
-prompt /
-prompt SHOW ERRORS
-prompt SET DEFINE ON
-spool off
-set feedback on
-set heading on
-set termout on
-set linesize 100
-EXIT;
-EOF
- >/dev/null );
-}
 
 function export_db_object(){
+  local v_file="$1" v_owner="$2" v_name="$3" v_type="$4"
 
-res=$(sqlplus -s ${username}/${pass}@${tns_entry} << EOF
+  sqlplus -s -l /nolog <<EOF >/dev/null
+connect ${username}/${pass}@${tns_entry}
+set feedback off heading off termout off pagesize 0 trimspool on verify off
+set long 2000000 longchunksize 2000000 linesize 32767
 
-set feedback off
-set heading off
-set termout off
-set linesize 32767
-set pagesize 0
-set long 1000000
-set longchunksize 1000000
-set trimspool on
-set verify off
+exec dbms_metadata.set_transform_param(dbms_metadata.session_transform, 'PRETTY', true);
+exec dbms_metadata.set_transform_param(dbms_metadata.session_transform, 'SEGMENT_ATTRIBUTES', false);
+exec dbms_metadata.set_transform_param(dbms_metadata.session_transform, 'SQLTERMINATOR', true);
 
-variable l_owner        varchar2(10)
-variable l_object       varchar2(30)
-variable l_file_name    varchar2(100)
-variable l_object_type  varchar2(30)
-
-exec :l_file_name   := '$1';
-exec :l_owner       := '$2';
-exec :l_object      := '$3';
-exec :l_object_type := '$4';
-
-spool $1
+spool $v_file
 prompt SET DEFINE OFF
-SELECT dbms_metadata.get_ddl(:l_object_type, :l_object, :l_owner, '11.2.0') FROM dual;
-prompt /
-prompt SHOW ERRORS
-prompt SET DEFINE ON
+SELECT dbms_metadata.get_ddl('$v_type', '$v_name', '$v_owner', '11.2.0') FROM dual;
 spool off
 EXIT;
 EOF
- >/dev/null );
 }
+
+
+
+function dump_db_object(){
+  local v_seq="$1" v_owner="$2" v_object="$3" v_type="$4"
+  local sep=':'
+  local sql_dir="${ldt_dir}/sql"
+
+  res=$(sqlplus -s -l ${username}/${pass}@${tns_entry} << EOF
+set heading off feedback off pagesize 0 linesize 2000 trimspool on verify off echo off
+
+WITH iv_view_deps AS (
+    SELECT d.name AS object_name
+         , d.referenced_name
+         , d.referenced_type
+         , CASE WHEN d.type LIKE 'PACKAGE%' THEN 'PACKAGE' ELSE d.type END AS object_type
+         , d.owner AS object_owner
+    FROM all_dependencies d
+    WHERE d.type LIKE UPPER('$v_type%')
+      AND d.name LIKE UPPER('$v_object')
+      AND d.owner = UPPER('$v_owner')
+), iv_hierarchy AS (
+    SELECT object_name, object_owner, referenced_name, object_type, level AS dependency_level
+    FROM iv_view_deps
+    START WITH referenced_name NOT IN (SELECT object_name FROM iv_view_deps)
+    CONNECT BY NOCYCLE PRIOR object_name = referenced_name
+), iv_object_detail AS (
+    SELECT object_name, object_type, object_owner, MAX(dependency_level) AS dependency_level
+    FROM iv_hierarchy
+    GROUP BY object_name, object_type, object_owner
+)
+SELECT object_owner || '$sep' || 
+       object_name || '$sep' || 
+       object_type || '$sep' || 
+       lower(to_char($v_seq, 'fm00') || '.' || to_char(dependency_level, 'fm9999900') || '.' || 
+       object_type || '.' || object_owner || '.' || object_name || '.sql') || '$sep' ||
+       to_char(sysdate, 'DD-MON-YYYY HH24:MI:SS') as formatted_output
+FROM iv_object_detail
+ORDER BY dependency_level, object_type, object_owner, object_name;
+
+EXIT;
+EOF
+)
+
+  while IFS=':' read -r v_owner v_name v_type v_file v_timestamp; do
+    v_owner=$(echo $v_owner | xargs)
+    v_type=$(echo $v_type | xargs)
+
+    [[ -z "$v_owner" ]] && continue
+
+    export_db_object "$v_file" "$v_owner" "$v_name" "$v_type"
+    
+  done <<< "$res"
+}
+
+function dump_db_object2(){
+  local v_seq="$1" v_owner="$2" v_object="$3" v_type="$4"
+  local sep=':'
+  local sql_dir="${ldt_dir}/sql"
+
+  res=$(sqlplus -s -l ${username}/${pass}@${tns_entry} << EOF
+set heading off feedback off pagesize 0 linesize 2000 trimspool on verify off echo off
+
+WITH iv_object_detail AS (
+   SELECT d.owner AS object_owner
+        , d.object_type
+        , d.object_name
+        , ROWNUM AS dependency_level
+     FROM all_objects d
+    WHERE d.owner = UPPER('$v_owner')
+      AND d.object_type LIKE UPPER('$v_type%')
+      AND d.object_name LIKE UPPER('$v_object')
+)
+SELECT object_owner || '$sep' || 
+       object_name || '$sep' || 
+       object_type || '$sep' || 
+       lower(to_char($v_seq, 'fm00') || '.' || to_char(dependency_level, 'fm9999900') || '.' || 
+       object_type || '.' || object_owner || '.' || object_name || '.sql') || '$sep' ||
+       to_char(sysdate, 'DD-MON-YYYY HH24:MI:SS') as formatted_output
+FROM iv_object_detail
+ORDER BY dependency_level, object_type, object_owner, object_name;
+
+EXIT;
+EOF
+)
+
+  while IFS=':' read -r v_owner v_name v_type v_file v_timestamp; do
+    v_owner=$(echo $v_owner | xargs)
+    v_type=$(echo $v_type | xargs)
+
+    [[ -z "$v_owner" ]] && continue
+
+    export_db_object "$v_file" "$v_owner" "$v_name" "$v_type"
+    
+  done <<< "$res"
+}
+
 
 function export_path()
 {
@@ -419,122 +440,6 @@ function export_path()
     fi
 
     # path_counter=$((path_counter+1));
-}
-
-function dump_plsql(){
-sep=':';
-sql_dir="${ldt_dir}/sql";
-mkdir -p "${sql_dir}";
-
-res=$(sqlplus -s ${username}/${pass}@${tns_entry} << EOF
-
-whenever sqlerror exit sql.sqlcode rollback
-whenever oserror exit sql.sqlcode rollback
-
-set serveroutput on
-
-set echo off
-set echo off
-set echo off
-set autotrace off
-set tab off
-set wrap off
-set feedback off
-set linesize 1000
-set pagesize 0
-set trimspool on
-set headsep off
-
-variable l_seq      number
-
-variable l_owner    varchar2(100)
-variable l_object   varchar2(100)
-variable l_obj_sep  varchar2(100)
-variable l_obj_path varchar2(100)
-
-exec :l_seq      := '$1';
-exec :l_owner    := '$2';
-exec :l_object   := '$3';
-exec :l_obj_sep  := '$sep';
-exec :l_obj_path := '$sql_dir';
-
-
-DECLARE  
-    
-    CURSOR lc_dependencies ( p_owner VARCHAR2 , p_object VARCHAR2 ) IS
-        WITH v_objs AS 
-        (
-            SELECT
-                owner,
-                name,
-                ROW_NUMBER() OVER( ORDER BY NAME ) AS indx
-            FROM
-                sys.dba_source
-            WHERE
-                name LIKE upper(trim(p_object))
-                and owner = upper(trim(p_owner))
-            GROUP BY owner, name
-            ORDER BY name
-        ), v_objs2 AS 
-        (
-            SELECT
-                v1.owner,
-                v1.name,
-                v2.owner    AS dependent_owner,
-                v2.name     AS dependent_name,
-                ROW_NUMBER() OVER(  ORDER BY v1.indx, v2.indx ) AS indx,
-                (
-                    SELECT COUNT(1)
-                    FROM all_dependencies
-                    WHERE referenced_name = v2.name
-                        AND name = v1.name
-                        AND name != v2.name
-                ) AS dependencies
-            FROM
-                v_objs  v1,
-                v_objs  v2
-            ORDER BY
-                v1.indx,
-                v2.indx
-        ), v_objs3 AS 
-        (
-            SELECT
-                dependent_owner  AS schema,
-                dependent_name   AS package,
-                ROW_NUMBER() OVER(PARTITION BY dependent_owner, dependent_name ORDER BY dependencies DESC, indx) AS indx
-            FROM
-                v_objs2
-            ORDER BY
-                dependencies DESC,
-                indx
-        )
-        SELECT
-            schema,
-            package,
-            :l_obj_path || lower( '/' || to_char(:l_seq, 'fm00') ||'.'||to_char(rownum, 'fm00')||'.'||schema||'.'||package||'.sql') as file_name
-        FROM
-            v_objs3
-        WHERE
-            indx = 1;
-            
-
-BEGIN
-        
-    FOR l_obj IN lc_dependencies(:l_owner, :l_object)
-    LOOP
-        DBMS_OUTPUT.PUT_LINE(l_obj.schema || :l_obj_sep || l_obj.package || :l_obj_sep || l_obj.file_name || :l_obj_sep||to_char(sysdate, 'DD-MON-YYYY HH24:MI:SS'));
-    END LOOP;
-    
-END;
-/
-EXIT;
-EOF
-);
-IFS=$'\n' read -rd '' -a pls <<<"${res}";
-for p1 in "${pls[@]}"; do
-  IFS=$':' read -rd '' -a props <<<"${p1}";
-  export_plsql "${props[2]}" "${props[0]}" "${props[1]}";
-done
 }
 
 
@@ -747,7 +652,7 @@ for paol in "${aols[@]}"; do
             ;;
 
             PACKAGE)
-                dump_plsql "${alias}" "${schema}" "${object}";
+                dump_db_object "${alias}" "${schema}" "${object}" "PACKAGE" ;
             
             ;;
 
@@ -780,7 +685,7 @@ for paol in "${aols[@]}"; do
                 else
                    echo -e "${Red}${file_flavour} '[${object}]' personalization is not currently supported.${NC}" ;
                 fi
-                # dump_plsql "${alias}" "${schema}" "${object}";
+                # dump_db_object "${alias}" "${schema}" "${object}";
             
             ;;
 
